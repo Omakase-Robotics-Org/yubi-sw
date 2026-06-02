@@ -1,0 +1,19 @@
+# Stationary (yagura) — overlay onto common/robot_config.yaml
+# Sets robot_type and appends RealSense head-camera topics to record_topics.
+
+/**:
+  ros__parameters:
+    robot_type: "yubi"
+
+    record_topics:
+      __extend__:
+        - "/camera/camera/color/camera_info"
+        - "/camera/camera/color/image_raw/compressed"
+        - "/camera/camera/color/metadata"
+        - "/camera/camera/depth/camera_info"
+        - "/camera/camera/depth/metadata"
+        - "/camera/camera/aligned_depth_to_color/camera_info"
+        - "/camera/camera/aligned_depth_to_color/image_raw/compressedDepth"
+        - "/camera/camera/extrinsics/depth_to_color"
+        # - "/camera/camera/depth/image_rect_raw/compressed" # Disabled: aligned_depth_to_color is preferred for color-aligned depth.
+        # - "/camera/camera/depth/image_rect_raw/compressedDepth" # Temporarily disabled due to large data size and low bandwidth in current setup.

@@ -1,0 +1,23 @@
+# Stationary (yagura) — overlay onto common/yubi_devices.yaml
+# Adds: footpedal_node (presence marker), task_command_dispatch_node (footpedal
+# button mapping), /camera/camera (RealSense head camera).
+
+footpedal_node:
+  ros__parameters: {}
+
+task_command_dispatch_node:
+  ros__parameters:
+    joy_accept_button: 2
+    joy_reject_button: 1
+    joy_cancel_episode_button: 0
+    joy_rewind_button: -1
+
+/camera/camera:
+  ros__parameters:
+    enable_color: true
+    rgb_camera.color_profile: "640x480x30"
+    enable_depth: false
+    align_depth.enable: false
+    enable_sync: true
+    publish_tf: true
+    tf_publish_rate: 1.0

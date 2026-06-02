@@ -1,0 +1,185 @@
+networks:
+  datalake_net:
+    driver: bridge
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    env_file:
+      - .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - ${MINIO_DATA_PATH:-./minio_data}:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - datalake_net
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD};
+      mc mb --ignore-existing local/data;
+      echo 'MinIO bucket created: data';
+      "
+    restart: "no"
+    networks:
+      - datalake_net
+
+  config-init:
+    image: python:3.12-slim
+    container_name: config-init
+    working_dir: /work
+    volumes:
+      - ./:/work
+    command:
+      - sh
+      - -c
+      - "pip install --quiet pyyaml && python /work/yubi_bringup/tools/build_runtime_configs.py --variant ${ROBOT_VARIANT:-stationary} --with-local"
+    restart: "no"
+
+  yubi:
+    image: yubi:latest
+    container_name: yubi
+    build:
+      context: ./
+      dockerfile: ./docker/Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        YUBI_GIT_HASH: ${YUBI_GIT_HASH:-unknown}
+        YUBI_GIT_BRANCH: ${YUBI_GIT_BRANCH:-unknown}
+    privileged: true
+    network_mode: host
+    stdin_open: true
+    tty: true
+    env_file:
+      - .env
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      - CYCLONEDDS_URI=file:///root/cyclonedds_profile.xml
+      - ROBOT_VARIANT=${ROBOT_VARIANT:-stationary}
+    entrypoint: /root/ros_entrypoint.sh
+    command: ros2 launch yubi_bringup yubi_data_collection.launch.py
+    volumes:
+      # Source overlays for live edits — these directories are also COPYed into
+      # the image at build time, so the container runs from the image when
+      # the host directory is missing. Mounting them here lets developers
+      # edit Python sources on the host and re-run `colcon build` inside the
+      # container without rebuilding the image.
+      - ./yubi_bringup/:/root/ros2_ws/src/yubi_bringup/
+      - ./yubi_description/:/root/ros2_ws/src/yubi_description/
+      - ./airoa_quest/:/root/ros2_ws/src/airoa_quest/
+      - /etc/yubi:/etc/yubi:ro
+      - ${DATA_MOUNT_PATH:-~/yubi_data}:/opt/data
+      - /dev/:/dev/
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ./yubi_bringup/docker/cyclonedds_profile.xml:/root/cyclonedds_profile.xml
+    restart: unless-stopped
+
+  yubi_core_builder:
+    image: yubi-core:latest
+    build:
+      context: ./yubi-core
+      dockerfile: ./docker/Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+        GIT_HASH: ${ADC_GIT_HASH:-unknown}
+        GIT_BRANCH: ${ADC_GIT_BRANCH:-unknown}
+    profiles: ["build-only"]
+
+  yubi_core:
+    image: yubi-core:latest
+    container_name: yubi_core
+    privileged: true
+    network_mode: host
+    stdin_open: true
+    tty: true
+    depends_on:
+      minio:
+        condition: service_healthy
+      config-init:
+        condition: service_completed_successfully
+      yubi:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - ENV=production
+      - LOG_LEVEL=info
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      - CYCLONEDDS_URI=file:///root/cyclonedds_profile.xml
+      - SENTRY_DSN=${SENTRY_DSN:-}
+      - ROBOT_VARIANT=${ROBOT_VARIANT:-stationary}
+    entrypoint: /root/ros_entrypoint.sh
+    command: ros2 launch yubi_core leader_teleop.launch.py
+    volumes:
+      # Source overlays for live edits — also COPYed into the image at build
+      # time. See the same block in the `yubi` service above for rationale.
+      - ./yubi-core/yubi-core:/root/ros2_ws/src/yubi_core
+      - ./yubi-core/airoa_data_msgs:/root/ros2_ws/src/airoa_data_msgs
+      - ./airoa_quest:/root/ros2_ws/src/airoa_quest
+      - /dev:/dev
+      - ./yubi_bringup/docker/cyclonedds_profile.xml:/root/cyclonedds_profile.xml
+      - ${DATA_MOUNT_PATH:-~/yubi_data}:/opt/data
+      - ./yubi_bringup/config/_runtime/${ROBOT_VARIANT:-stationary}/robot_config.yaml:/root/ros2_ws/install/yubi_core/share/yubi_core/config/robot_config.yaml
+      - ./yubi_bringup/config/_runtime/${ROBOT_VARIANT:-stationary}/recording_gate.yaml:/root/ros2_ws/install/yubi_core/share/yubi_core/config/recording_gate.yaml
+      - ./yubi_bringup/config/_runtime/${ROBOT_VARIANT:-stationary}/upload_targets.yaml:/root/ros2_ws/install/yubi_core/share/yubi_core/config/upload_targets.yaml
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket:ro
+    restart: unless-stopped
+
+  web_video_server:
+    image: yubi-core:latest
+    container_name: web_video_server
+    network_mode: host
+    privileged: true
+    depends_on:
+      - yubi_core
+    env_file:
+      - .env
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}
+      - CYCLONEDDS_URI=file:///root/cyclonedds_profile.xml
+      - WEB_VIDEO_SERVER_PORT=${WEB_VIDEO_SERVER_PORT:-9090}
+    volumes:
+      - ./yubi_bringup/docker/cyclonedds_profile.xml:/root/cyclonedds_profile.xml
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket:ro
+    command: >
+      bash -c "
+        source /root/ros_entrypoint.sh &&
+        ros2 run web_video_server web_video_server --ros-args -p port:=$${WEB_VIDEO_SERVER_PORT}
+      "
+    restart: unless-stopped
+
+  lock_server:
+    image: yubi_lock_server:latest
+    build:
+      context: ./yubi-core/lock_server
+    container_name: lock_server
+    ports:
+      - "127.0.0.1:28080:28080"
+    volumes:
+      - ./yubi-core/lock_server/config.json:/app/config.json:ro
+    restart: unless-stopped

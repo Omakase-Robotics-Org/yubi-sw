@@ -1,0 +1,16 @@
+# Portable — overlay onto common/robot_config.yaml
+# Sets robot_type and appends USB center-camera topics to record_topics.
+
+/**:
+  ros__parameters:
+    robot_type: "yubi_portable"
+
+    record_topics:
+      __extend__:
+        - "/center_camera/camera_info"
+        - "/center_camera/image_raw/compressed"
+        # Aggregated joy stream consumed by task_command_dispatch_node (variant input).
+        - "/portable_joy_command"
+        # Per-gripper double-click intermediates feeding /portable_joy_command.
+        - "/yubi/gripper/left/double_click_state"
+        - "/yubi/gripper/right/double_click_state"

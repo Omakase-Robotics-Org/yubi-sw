@@ -1,0 +1,65 @@
+left_camera/usb_cam:
+  ros__parameters:
+    video_device: "/dev/yubi_left_camera"
+    framerate: 120.0
+    image_width: 640
+    image_height: 480
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+    camera_name: "left_camera"
+    frame_id: "left_camera_optical_frame"
+    controls:
+      brightness: 50
+      white_balance_automatic: true
+      auto_exposure: 3
+
+right_camera/usb_cam:
+  ros__parameters:
+    video_device: "/dev/yubi_right_camera"
+    framerate: 120.0
+    image_width: 640
+    image_height: 480
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+    camera_name: "right_camera"
+    frame_id: "right_camera_optical_frame"
+    controls:
+      brightness: 50
+      white_balance_automatic: true
+      auto_exposure: 3
+
+quest_bridge_node:
+  ros__parameters:
+    # Set to the Quest headset's IP on your network (see README for override).
+    quest_ip: "WRITE_HERE" # FIXME: default for testing; replace with actual IP for real use
+    tcp_port: 65432
+    sync_port: 42000
+
+    parent_frame: "quest_origin"
+    hmd_frame: "quest_hmd"
+    left_frame: "left_hand_root"
+    right_frame: "right_hand_root"
+
+    diag_topic: "/diagnostics"
+    hmd_topic: "/quest/hmd/state"
+    hmd_battery_topic: "/quest/hmd/battery"
+    left_controller_topic: "/quest/controller/left/state"
+    right_controller_topic: "/quest/controller/right/state"
+    left_controller_joy_topic: "/quest/controller/left/joy"
+    right_controller_joy_topic: "/quest/controller/right/joy"
+    left_controller_battery_topic: "/quest/controller/left/battery"
+    right_controller_battery_topic: "/quest/controller/right/battery"
+
+    connect_retry_sec: 1.0
+    diag_period_sec: 0.5
+    battery_status_hz: 1.0
+
+encoder_node:
+  ros__parameters:
+    left_port: "/dev/yubi_left_esp32c6"
+    right_port: "/dev/yubi_right_esp32c6"
+    baud: 115200
+    left_joint_name: "left_right_finger_joint"
+    right_joint_name: "right_right_finger_joint"
+    left_rotation_direction: -1 # if you use the AS4058A encoder, set this to 1. For the AS5601, set it to -1.
+    right_rotation_direction: -1 # if you use the AS4058A encoder, set this to 1. For the AS5601, set it to -1.

@@ -1,0 +1,42 @@
+# Portable — overlay onto common/yubi_devices.yaml
+# Adds: center_camera (USB cam replacing RealSense), task_command_dispatch_node
+# (Quest controller button mapping). No footpedal_node section — that node
+# is intentionally skipped (no footpedal hardware in portable variant).
+
+center_camera/usb_cam:
+  ros__parameters:
+    video_device: "/dev/yubi_center_camera"
+    framerate: 60.0
+    image_width: 640
+    image_height: 480
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+    camera_name: "center_camera"
+    frame_id: "center_camera_optical_frame"
+    controls:
+      brightness: 50
+      white_balance_automatic: true
+      auto_exposure: 3
+
+task_command_dispatch_node:
+  ros__parameters:
+    # Portable input source: /portable_joy_command (aggregated from left/right
+    # gripper double-click + Quest controller buttons by portable_joy_command_node).
+    # Button layout — see yubi_bringup/portable_joy_command_node.py:
+    #   [0] quest_x
+    #   [1] quest_b
+    #   [2] gripper double-click | quest_a
+    joy_accept_button: 2
+    joy_reject_button: 1
+    joy_cancel_episode_button: 0
+    joy_rewind_button: -1
+
+
+# Presence markers — spawn the per-gripper double-click detector and the
+# aggregator that publishes /portable_joy_command (consumed by
+# task_command_dispatch_node via the joy_remap_topic launch arg).
+gripper_double_click_node:
+  ros__parameters: {}
+
+portable_joy_command_node:
+  ros__parameters: {}

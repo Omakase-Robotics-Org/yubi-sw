@@ -1,0 +1,216 @@
+# =============================================================================
+# Data Collection — Robot Configuration (common base)
+# =============================================================================
+#
+# Common parameters shared across all robot variants. Variant-specific overlays
+# at config/<variant>/robot_config.yaml set robot_type and extend record_topics
+# with head-camera entries appropriate to the hardware.
+#
+# Parameter lifecycle annotations:
+#   [CONFIG]  — Set in this file, read once at startup, never changes
+#   [BACKEND] — Default "FIXME" is resolved from backend API at startup
+#
+# =============================================================================
+
+/**:
+  ros__parameters:
+
+    # =========================================================================
+    # Robot Identity
+    # =========================================================================
+    # robot_type is set in variant overlay (stationary/portable/...).
+
+    # [CONFIG] ROS topic publishing sensor_msgs/BatteryState.
+    # Leave empty to disable battery monitoring in status reports.
+    # Used by: robot_status
+    battery_topic: ""
+
+    # [CONFIG] JSON array of input devices attached to the robot.
+    # Each device: {"role": "controller"|"sensor", "type": "<type>", "id": "<id>"}
+    # Used by: record_manager (written to recording metadata)
+    devices: '[]'
+
+    # =========================================================================
+    # Recording — Topics
+    # =========================================================================
+
+    # [CONFIG] Common topics recorded across all variants. Variant overlays
+    # append head-camera topics via record_topics: {__extend__: [...]}.
+    # Used by: record_manager
+    record_topics:
+      - "/joint_states"
+      - "/device_ids"
+      - "/left_camera/camera_info"
+      - "/left_camera/image_raw/compressed"
+      - "/right_camera/camera_info"
+      - "/right_camera/image_raw/compressed"
+      - "/quest/hmd/state"
+      - "/quest/hmd/battery"
+      - "/quest/controller/left/state"
+      - "/quest/controller/left/joy"
+      - "/quest/controller/left/battery"
+      - "/quest/controller/left/tracked"
+      - "/quest/controller/left/valid"
+      - "/quest/controller/right/state"
+      - "/quest/controller/right/joy"
+      - "/quest/controller/right/battery"
+      - "/quest/controller/right/tracked"
+      - "/quest/controller/right/valid"
+      - "/yubi/gripper/left/joint_state"
+      - "/yubi/gripper/left/encoder_offset"
+      - "/yubi/gripper/right/joint_state"
+      - "/yubi/gripper/right/encoder_offset"
+      - "/yubi/gripper/left/id"
+      - "/yubi/gripper/right/id"
+      - "/footpedal_states"
+      - "/tf"
+      - "/tf_static"
+      - "/diagnostics"
+      - "/recording_gate/gate_level"
+      - "/parameter_events"
+      - "/rosout"
+
+    # [CONFIG] Rosbag recorder CLI arguments.
+    # Used by: record_manager
+    rosbag_params:
+      - '--storage'
+      - 'mcap'
+
+    # [CONFIG] Directory where rosbags are saved locally.
+    # Used by: record_manager, recording_uploader
+    record_base_dir: "/opt/data/rosbags"
+
+    # [CONFIG] Minimum free disk space (GB) required to start recording.
+    # Used by: record_manager
+    required_free_space: 10
+
+    # =========================================================================
+    # Upload — S3-Compatible Object Storage
+    # =========================================================================
+
+    # [CONFIG] Enable/disable automatic upload of completed recordings.
+    # Used by: recording_uploader
+    upload_enabled: true
+
+    # [CONFIG] Path to upload_targets.yaml for multi-target uploads.
+    # When set, overrides the legacy s3_* parameters below.
+    # See upload_targets.yaml.sample for format.
+    # Used by: recording_uploader
+    upload_targets_file: "/root/ros2_ws/install/yubi_core/share/yubi_core/config/upload_targets.yaml"
+
+    # [CONFIG] S3-compatible endpoint (host:port).
+    # Legacy single-target fallback (ignored when upload_targets_file is set).
+    # Used by: recording_uploader, remote_gc_node
+    s3_endpoint: "localhost:9000"
+
+    # [CONFIG] S3 bucket name.
+    # Used by: recording_uploader, remote_gc_node
+    s3_bucket: "data"
+
+    # [CONFIG] S3 access credentials.
+    # Used by: recording_uploader, remote_gc_node
+    s3_access_key_id: "minioadmin"
+    s3_secret_access_key: "minioadmin"
+
+    # [CONFIG] Use HTTPS for S3 connections.
+    # Used by: recording_uploader, remote_gc_node
+    s3_use_ssl: false
+
+    # [CONFIG] Optional prefix (folder) in the bucket.
+    # Used by: recording_uploader, remote_gc_node
+    s3_prefix: ""
+
+    # Retention, GC, and delete_after_upload settings have moved to
+    # upload_targets.yaml. See upload_targets.yaml.sample.
+
+    # =========================================================================
+    # Backend API
+    # =========================================================================
+
+    # [CONFIG] Backend API base URL.
+    # Override per deployment via config/local/robot_config.yaml — see README.
+    # Used by: task_sequence_manager, record_manager, robot_status, recording_uploader
+    base_url: "http://localhost:4000/api" # FIXME: replace with your backend URL. When using yubi-app as the backend, use port 8000 (e.g. http://localhost:8000/api).
+
+    # [CONFIG] Backend API key (X-API-Key header).
+    # Do NOT commit a real key. Override at runtime via config/local/robot_config.yaml
+    # — see README for setup.
+    # Used by: task_sequence_manager, record_manager, robot_status, recording_uploader
+    api_key: "WRITE_HERE" # FIXME: default for testing; replace with actual API key for real use
+
+    # [CONFIG] Run without a backend server. Tasks are loaded from task_file.
+    # Used by: task_sequence_manager, record_manager, task_receiver
+    offline_mode: false
+
+    # [CONFIG] Path to YAML task definitions for offline mode.
+    # Ignored when offline_mode is false. See task_file.yaml.sample.
+    # Used by: task_sequence_manager, record_manager, task_receiver
+    task_file: ""
+
+    # bridge_mode is a launch argument, not a YAML parameter.
+    # Pass bridge_mode:=true on the ros2 launch command line to skip
+    # task_receiver and let an external node (e.g. sim_bridge) provide tasks.
+
+    # [CONFIG] Auto-repeat last episode when operator accepts with no queued task.
+    # Used by: task_sequence_manager
+    auto_repeat_episode: true
+
+    # [CONFIG] Use simulation time from the /clock topic.
+    # When true, rosbag2 records with --use-sim-time and TSM timestamps
+    # use the ROS clock instead of wall time.
+    # Used by: record_manager, task_sequence_manager (via ROS built-in)
+    use_sim_time: false
+
+    # =========================================================================
+    # Deployment Metadata
+    # =========================================================================
+
+    # [CONFIG] Environment classification for recording metadata.
+    # Used by: record_manager
+    environment_type: "real_world"
+
+    # [CONFIG] Site identifier — physical location where the robot operates.
+    # Used by: record_manager (written to recording metadata)
+    site: ""
+
+    # [CONFIG] Sub-location within the site.
+    # Used by: record_manager (written to recording metadata)
+    location: ""
+
+    # [CONFIG] Teleop interface name and source repository.
+    # Used by: record_manager (written to recording metadata as programs[role=interface])
+    teleop_interface: "yubi"
+    teleop_interface_url: "https://github.com/airoa-org/yubi-sw"
+
+    # [BACKEND] Organization that owns this robot.
+    # Set to "FIXME" to auto-resolve from backend /robot/me → organization_id.
+    # Used by: task_sequence_manager, record_manager
+    runner_organization: "FIXME"
+
+    # =========================================================================
+    # Recording Gate
+    # =========================================================================
+
+    # [CONFIG] Enable the recording gate safety/health system.
+    # When enabled, provide a recording_gate_config path below.
+    # Used by: task_sequence_manager
+    use_recording_gate: true
+
+    # [CONFIG] Path to recording gate YAML (see recording_gate.yaml.sample).
+    # Leave empty to disable the gate.
+    # Used by: recording_gate_node
+    recording_gate_config: "/root/ros2_ws/install/yubi_core/share/yubi_core/config/recording_gate.yaml"
+
+    # =========================================================================
+    # Status Reporting
+    # =========================================================================
+
+    # [CONFIG] Interval (seconds) between periodic status reports to backend.
+    # Used by: robot_status
+    status_interval_sec: 30.0
+
+    # [CONFIG] Minimum interval (seconds) between reactive gate status reports.
+    # When gate conditions change (level transition or condition pass/fail),
+    # an immediate report is sent, throttled to at most once per this interval.
+    # Used by: robot_status
+    gate_throttle_sec: 2.0

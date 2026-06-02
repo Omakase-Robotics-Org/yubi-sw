@@ -1,0 +1,237 @@
+# =============================================================================
+# Recording Gate — Yubi Common Configuration
+# =============================================================================
+#
+# Variant-agnostic checks. Head-camera conditions live in
+# config/<variant>/recording_gate.yaml and are merged in by build_runtime_configs.py.
+#
+# Common checks:
+#   1. Hand cameras (left/right): < 60 Hz warn, < 30 Hz stop; topic missing
+#      > 1 s warn, > 3 s stop.
+#   2. Gripper joint_state stalled > 0.1s → hard stop.
+#   3. TF frames from Quest (quest_origin → *_hand_root): 
+#      > 0.5 s stale warn, > 1 s stale stop.
+#   4. Quest hand tracking (per-topic std_msgs/Bool: tracked, valid):
+#      lost/invalid → warn (BLOCK_START) debounce 0.5 s,
+#      stop (HARD_STOP) debounce 1.0 s.
+#   5. Subtask duration limits: 
+#      > 90 s warn, > 120 s stop.
+#
+# =============================================================================
+
+eval_rate: 4.0
+settle_sec: 5.0
+recovery_sec: 0.5
+default_escalation: 2
+
+groups:
+
+  # ---------------------------------------------------------------------------
+  # Health — camera frame rate monitoring
+  # ---------------------------------------------------------------------------
+  health:
+    recovery_sec: 0.5
+    default_type: topic_condition
+    conditions:
+
+      # Hand cameras: topic stopped → warn at 1s, stop at 3s
+      left_camera_timeout_warn:
+        topic: /left_camera/camera_info
+        timeout_sec: 1.0
+        escalation: 1
+
+      left_camera_timeout_stop:
+        topic: /left_camera/camera_info
+        timeout_sec: 3.0
+        escalation: 2
+
+      right_camera_timeout_warn:
+        topic: /right_camera/camera_info
+        timeout_sec: 1.0
+        escalation: 1
+
+      right_camera_timeout_stop:
+        topic: /right_camera/camera_info
+        timeout_sec: 3.0
+        escalation: 2
+
+      # Gripper joint_state (encoder_node @ ~100 Hz, per side):
+      # topic stalled > 0.1s → hard stop
+      left_gripper_joint_state_timeout_stop:
+        topic: /yubi/gripper/left/joint_state
+        timeout_sec: 0.1
+        escalation: 2
+        reason: "Left gripper joint_state stalled (> 0.1s)"
+
+      right_gripper_joint_state_timeout_stop:
+        topic: /yubi/gripper/right/joint_state
+        timeout_sec: 0.1
+        escalation: 2
+        reason: "Right gripper joint_state stalled (> 0.1s)"
+
+      # Hand cameras: < 60 Hz → warning (BLOCK_START), < 30 Hz → stop (HARD_STOP)
+      left_camera_warn:
+        topic: /left_camera/camera_info
+        timeout_sec: 3.0
+        min_rate_hz: 60.0
+        rate_window_sec: 5.0
+        rate_escalation: 1
+        debounce_sec: 0.5
+        reason: "Left hand camera frame rate below 60 Hz ({detail})"
+
+      left_camera_stop:
+        topic: /left_camera/camera_info
+        timeout_sec: 3.0
+        min_rate_hz: 30.0
+        rate_window_sec: 5.0
+        rate_escalation: 2
+        debounce_sec: 0.5
+        reason: "Left hand camera frame rate below 30 Hz ({detail})"
+
+      right_camera_warn:
+        topic: /right_camera/camera_info
+        timeout_sec: 3.0
+        min_rate_hz: 60.0
+        rate_window_sec: 5.0
+        rate_escalation: 1
+        debounce_sec: 0.5
+        reason: "Right hand camera frame rate below 60 Hz ({detail})"
+
+      right_camera_stop:
+        topic: /right_camera/camera_info
+        timeout_sec: 3.0
+        min_rate_hz: 30.0
+        rate_window_sec: 5.0
+        rate_escalation: 2
+        debounce_sec: 0.5
+        reason: "Right hand camera frame rate below 30 Hz ({detail})"
+
+  # ---------------------------------------------------------------------------
+  # TF — transform availability and freshness
+  # ---------------------------------------------------------------------------
+  tf:
+    recovery_sec: 0.5
+    default_type: tf_availability
+    conditions:
+
+      # TF: > 0.5s stale → warning (BLOCK_START), > 1s stale → stop (HARD_STOP)
+      quest_hands_warn:
+        frames:
+          - source: "quest_origin"
+            target: "left_hand_root"
+            max_age_sec: 1.0
+          - source: "quest_origin"
+            target: "right_hand_root"
+            max_age_sec: 1.0
+        escalation: 1
+        reason: "TF frames from Quest stale (> 0.5s)"
+        timeout_sec: 0.5
+
+      quest_hands_stop:
+        frames:
+          - source: "quest_origin"
+            target: "left_hand_root"
+            max_age_sec: 5.0
+          - source: "quest_origin"
+            target: "right_hand_root"
+            max_age_sec: 5.0
+        escalation: 2
+        reason: "TF frames from Quest stale (> 1s)"
+        timeout_sec: 1.0
+
+  # ---------------------------------------------------------------------------
+  # VR Tracking — Quest controller/hand tracking status
+  # ---------------------------------------------------------------------------
+  # Subscribes to dedicated std_msgs/Bool topics published by quest_bridge.
+  # The /quest/controller/{side}/state topics are BEST_EFFORT QoS (high-rate
+  # pose stream); the Bool mirrors are RELIABLE so they match the
+  # recording_gate's default RELIABLE subscriber QoS.
+  vr_tracking:
+    recovery_sec: 0.0
+    default_type: topic_condition
+    conditions:
+
+      # Warn (BLOCK_START) — debounce 0.5s
+      left_tracked_warn:
+        topic: /quest/controller/left/tracked
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 1
+        debounce_sec: 0.5
+        reason: "Left hand tracking lost"
+
+      right_tracked_warn:
+        topic: /quest/controller/right/tracked
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 1
+        debounce_sec: 0.5
+        reason: "Right hand tracking lost"
+
+      left_valid_warn:
+        topic: /quest/controller/left/valid
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 1
+        debounce_sec: 0.5
+        reason: "Left hand pose invalid"
+
+      right_valid_warn:
+        topic: /quest/controller/right/valid
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 1
+        debounce_sec: 0.5
+        reason: "Right hand pose invalid"
+
+      # Stop (HARD_STOP) — debounce 1.0s
+      left_tracked_stop:
+        topic: /quest/controller/left/tracked
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 2
+        debounce_sec: 1.0
+        reason: "Left hand tracking lost"
+
+      right_tracked_stop:
+        topic: /quest/controller/right/tracked
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 2
+        debounce_sec: 1.0
+        reason: "Right hand tracking lost"
+
+      left_valid_stop:
+        topic: /quest/controller/left/valid
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 2
+        debounce_sec: 1.0
+        reason: "Left hand pose invalid"
+
+      right_valid_stop:
+        topic: /quest/controller/right/valid
+        condition: "msg.data"
+        timeout_sec: 1.0
+        escalation: 2
+        debounce_sec: 1.0
+        reason: "Right hand pose invalid"
+
+  # ---------------------------------------------------------------------------
+  # Duration Limits — subtask time caps
+  # ---------------------------------------------------------------------------
+  duration_limits:
+    default_type: topic_condition
+    conditions:
+
+      subtask_warn:
+        topic: /task_sequence_manager/subtask_elapsed_sec
+        condition: "msg.data < 90.0"
+        escalation: 1
+        timeout_sec: -1.0
+
+      subtask_limit:
+        topic: /task_sequence_manager/subtask_elapsed_sec
+        condition: "msg.data < 120.0"
+        escalation: 2
+        timeout_sec: -1.0
