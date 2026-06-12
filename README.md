@@ -461,17 +461,14 @@ setup and guidelines, and our [Code of Conduct](CODE_OF_CONDUCT.md).
 If you use YUBI in your research, please cite:
 
 ```bibtex
-@techreport{ohkawa2026yubi,
-  author      = {Takehiko Ohkawa and Jumpei Arima and Yuki Noguchi and
-                 Masatoshi Tateno and Makoto Sugiura and Takuya Okubo and
-                 Kengo Ikeuchi and Yuma Shin and Hiroki Nishizawa and
-                 Naoaki Kanazawa and Yuki Wakayama and Daiki Fukunaga and
-                 Koshi Makihara and Tomohiro Motoda and Floris Erich and
-                 Yukiyasu Domae and Tatsuya Matsushima and Yohishiro Okumatsu and
-                 Kei Ota},
-  title       = {{YUBI}: Yielding Universal Bidigital Interface for
-                 Bimanual Dexterous Manipulation at Scale},
-  year        = {2026},
+@misc{ohkawa2026yubi,
+      title={{YUBI}: Yielding Universal Bidigital Interface for Bimanual Dexterous Manipulation at Scale},
+      author={Takehiko Ohkawa and Jumpei Arima and Yuki Noguchi and Masatoshi Tateno and Makoto Sugiura and Takuya Okubo and Kengo Ikeuchi and Yuma Shin and Hiroki Nishizawa and Naoaki Kanazawa and Yuki Wakayama and Daiki Fukunaga and Koshi Makihara and Tomohiro Motoda and Floris Erich and Yukiyasu Domae and Tatsuya Matsushima and Yohishiro Okumatsu and Kei Ota},
+      year={2026},
+      eprint={2606.10244},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2606.10244},
 }
 ```
 
