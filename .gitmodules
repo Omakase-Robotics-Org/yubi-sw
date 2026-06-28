@@ -1,4 +1,4 @@
 [submodule "yubi-core"]
 	path = yubi-core
 	url = https://github.com/Omakase-Robotics-Org/yubi-core.git
-	branch = omakase-onsite
+	branch = main
