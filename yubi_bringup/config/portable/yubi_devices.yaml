@@ -18,6 +18,36 @@ center_camera/usb_cam:
       white_balance_automatic: true
       auto_exposure: 3
 
+left_camera/usb_cam:
+  ros__parameters:
+    video_device: "/dev/yubi_left_camera"
+    framerate: 60.0
+    image_width: 640
+    image_height: 480
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+    camera_name: "left_camera"
+    frame_id: "left_camera_optical_frame"
+    controls:
+      brightness: 50
+      white_balance_automatic: true
+      auto_exposure: 3
+
+right_camera/usb_cam:
+  ros__parameters:
+    video_device: "/dev/yubi_right_camera"
+    framerate: 60.0
+    image_width: 640
+    image_height: 480
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+    camera_name: "right_camera"
+    frame_id: "right_camera_optical_frame"
+    controls:
+      brightness: 50
+      white_balance_automatic: true
+      auto_exposure: 3
+
 task_command_dispatch_node:
   ros__parameters:
     # Portable input source: /portable_joy_command (aggregated from left/right

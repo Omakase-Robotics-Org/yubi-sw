@@ -5,15 +5,13 @@
 static constexpr uint32_t I2C_CLOCK_HZ = 400000;
 // Side + 3-digit index: "L###" for the left gripper, "R###" for the right,
 // e.g. "L003" / "R003".
-static const char* DEVICE_ID = "CHANGE HERE";
+static const char* DEVICE_ID = "L001";
 
 
 AS5601 encoder(Wire, 0x36, false);
 
 void setup()
 {
-	Wire.begin();
-  Wire.setClock(400000);
 	Serial.begin(115200);
 	while (!Serial)
 	{
@@ -21,8 +19,8 @@ void setup()
 	}
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_ESP32)
-	constexpr int SDA_PIN = 21;
-	constexpr int SCL_PIN = 22;
+	constexpr int SDA_PIN = 20;
+	constexpr int SCL_PIN = 19;
 	encoder.begin(I2C_CLOCK_HZ, SDA_PIN, SCL_PIN);
 #else
 	encoder.begin(I2C_CLOCK_HZ);

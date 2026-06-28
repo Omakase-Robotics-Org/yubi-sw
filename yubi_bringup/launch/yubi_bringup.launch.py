@@ -10,7 +10,7 @@ via the `robot_variant` launch argument.
 """
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch_ros.actions import Node
@@ -23,6 +23,13 @@ from yubi_bringup.launch_registry import (
     collect_yaml_keys,
     select_nodes,
 )
+
+# Keys for hand cameras that need staggered USB startup to avoid isochronous
+# bandwidth contention when all three cameras enumerate simultaneously.
+_CAMERA_STARTUP_DELAYS: dict[str, float] = {
+    "left_camera/usb_cam": 3.0,
+    "right_camera/usb_cam": 6.0,
+}
 
 
 def variant_yaml_paths(context, share=None):
@@ -42,7 +49,18 @@ def _spawn_bringup_nodes(context, *_args, **_kwargs):
     keys = collect_yaml_keys(paths)
     # ROS 2 multi-params: later files override earlier per-key.
     params = [str(p) for p in paths if p.exists()]
-    return select_nodes(BRINGUP_NODE_REGISTRY, keys, params)
+    actions = []
+    for entry in BRINGUP_NODE_REGISTRY:
+        key = entry["yaml_key"]
+        if key not in keys:
+            continue
+        node = entry["factory"](params)
+        delay = _CAMERA_STARTUP_DELAYS.get(key)
+        if delay:
+            actions.append(TimerAction(period=delay, actions=[node]))
+        else:
+            actions.append(node)
+    return actions
 
 
 def generate_launch_description():

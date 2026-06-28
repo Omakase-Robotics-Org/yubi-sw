@@ -100,8 +100,8 @@ services:
   yubi_core_builder:
     image: yubi-core:latest
     build:
-      context: ./yubi-core
-      dockerfile: ./docker/Dockerfile
+      context: ./
+      dockerfile: ./yubi-core/docker/Dockerfile
       args:
         ROS_DISTRO: ${ROS_DISTRO:-jazzy}
         GIT_HASH: ${ADC_GIT_HASH:-unknown}
