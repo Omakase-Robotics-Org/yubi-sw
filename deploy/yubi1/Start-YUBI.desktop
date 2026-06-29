@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Start YUBI
+Comment=Restart yubi-sw + yubi-app and open the recording UI
+Exec=/home/omakase1/Desktop/start-yubi.sh
+Icon=video-display
+Terminal=false
+Categories=Development;
