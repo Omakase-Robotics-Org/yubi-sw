@@ -37,7 +37,11 @@ RUN apt-get update -y && \
 COPY ./footpedal_ros /root/ros2_ws/src/footpedal_ros
 COPY ./yubi_bringup /root/ros2_ws/src/yubi_bringup
 COPY ./yubi_description /root/ros2_ws/src/yubi_description
-COPY ./airoa_quest /root/ros2_ws/src/airoa_quest
+# airoa_quest_msgs is already vendored + built in the yubi-core base image
+# (see yubi-core/docker/Dockerfile). Copy only the bridge package here to
+# avoid a duplicate airoa_quest_msgs in the colcon workspace, which makes
+# `rosdep install --from-paths src` fail with "Multiple packages found".
+COPY ./airoa_quest/airoa_quest_bridge /root/ros2_ws/src/airoa_quest_bridge
 
 # Clone RealSense ROS wrapper
 WORKDIR /root/ros2_ws/src
