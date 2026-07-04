@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""yubi1 -> S3 DIRECT uploader (edge laptop, no 6000pro hop).
+"""yubi -> S3 DIRECT uploader (edge laptop, no 6000pro hop).
+
+Box instance is NOT baked into this code: the specific box's identity (its AWS
+IoT thing name / cert) comes from env (IOT_THING + IOT_CERT/KEY/CA), so the same
+script runs on any yubi box. The device *type* is "yubi"; the "1" (box number)
+lives only in that box's env/cert.
 
 Reads episode objects from the LOCAL MinIO via its S3 API (objects are
 erasure-coded on disk, so the filesystem can't be read directly), and streams
@@ -31,7 +36,7 @@ import boto3
 from botocore.config import Config
 
 EP    = os.environ.get("IOT_ENDPOINT", "c7365kceqmnid.credentials.iot.ap-northeast-1.amazonaws.com")
-THING = os.environ.get("IOT_THING", "yubi1")
+THING = os.environ.get("IOT_THING", "")  # box instance thing name — REQUIRED via env
 ALIAS = os.environ.get("IOT_ROLE_ALIAS", "yubi-uploader-alias")
 CERT  = os.path.expanduser(os.environ.get("IOT_CERT", "~/iot/device.cert.pem"))
 KEY   = os.path.expanduser(os.environ.get("IOT_KEY",  "~/iot/device.private.key"))
