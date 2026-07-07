@@ -18,7 +18,6 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     EnvironmentVariable,
     LaunchConfiguration,
-    PythonExpression,
 )
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -78,18 +77,13 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "joy_remap_topic",
-                default_value=PythonExpression(
-                    [
-                        "'/portable_joy_command' if '",
-                        LaunchConfiguration("robot_variant"),
-                        "' == 'portable' else '/footpedal_states'",
-                    ]
-                ),
+                default_value="/footpedal_states",
                 description=(
                     "Topic remapped to /joy for task_command_dispatch_node. "
-                    "Stationary default: /footpedal_states (footpedal_node). "
-                    "Portable default: /portable_joy_command (aggregated by "
-                    "portable_joy_command_node from gripper double-click + Quest buttons)."
+                    "Default (both variants): /footpedal_states (footpedal_node) — "
+                    "operator's hands stay on the grippers. Portable can instead pass "
+                    "joy_remap_topic:=/portable_joy_command to use gripper double-click "
+                    "+ Quest controller buttons (aggregated by portable_joy_command_node)."
                 ),
             ),
             bringup_include,

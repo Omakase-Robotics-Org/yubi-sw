@@ -341,9 +341,28 @@ via `ros2 launch ... robot_variant:=portable`).
 | Variant | Center camera | Task input | `robot_type` |
 |---|---|---|---|
 | `stationary` | RealSense (`/camera/camera/*`) | Footpedal | `"yubi"` |
-| `portable`   | USB cam (`/center_camera/*`)   | Quest controller buttons + gripper state | `"yubi_portable"` |
+| `portable`   | USB cam (`/center_camera/*`)   | Footpedal (default) or Quest controller buttons + gripper double-click | `"yubi_portable"` |
 
 Both variants run the encoder node, the two hand USB cameras, and the Quest bridge.
+
+Portable defaults to the footpedal so the operator's hands never have to leave
+the grippers to end/start an episode (a handheld double-click is hard to do
+one-handed). To fall back to gripper double-click + Quest buttons instead, pass
+`joy_remap_topic:=/portable_joy_command` on the launch command line.
+
+Before relying on the footpedal, confirm which physical pedal maps to which
+button index — `footpedal_node` numbers buttons by the pedal's raw HID switch
+code, not left-to-right position:
+
+```bash
+ros2 run yubi_bringup identify_footpedal
+```
+
+Press each pedal one at a time (e.g. right, then center, then left) and read
+off the printed `button[N] pressed` line for each. Compare against
+`joy_accept_button` / `joy_reject_button` / `joy_cancel_episode_button` in
+`config/portable/yubi_devices.yaml` (and `config/stationary/yubi_devices.yaml`)
+to confirm — or update — which pedal triggers which action.
 
 ### Config layout
 
