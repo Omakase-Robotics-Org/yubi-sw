@@ -56,18 +56,18 @@ footpedal_node:
 task_command_dispatch_node:
   ros__parameters:
     # Default portable input source is /footpedal_states (see joy_remap_topic
-    # in yubi_data_collection.launch.py) — footpedal_node publishes 3 buttons
-    # keyed by the pedal's raw HID switch code, not physical left/right
-    # position. Run `ros2 run yubi_bringup identify_footpedal` and press each
-    # pedal individually to confirm which index below corresponds to which
-    # physical pedal before relying on this mapping.
+    # in yubi_data_collection.launch.py). footpedal_node numbers buttons by
+    # the pedal's raw HID switch code, not left/right position — confirmed on
+    # the yubi1 3-pedal footswitch via `ros2 run yubi_bringup identify_footpedal`
+    # (press right -> center -> left): right=button[2], center=button[1],
+    # left=button[0]. Re-verify with a different footswitch unit/model.
     #
     # /portable_joy_command (gripper double-click + Quest controller buttons,
     # see yubi_bringup/portable_joy_command_node.py) uses the same button
     # layout and remains available via joy_remap_topic:=/portable_joy_command.
-    joy_accept_button: 2
-    joy_reject_button: 1
-    joy_cancel_episode_button: 0
+    joy_accept_button: 2   # right pedal
+    joy_reject_button: 1   # center pedal
+    joy_cancel_episode_button: 0   # left pedal
     joy_rewind_button: -1
 
 

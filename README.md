@@ -350,19 +350,17 @@ the grippers to end/start an episode (a handheld double-click is hard to do
 one-handed). To fall back to gripper double-click + Quest buttons instead, pass
 `joy_remap_topic:=/portable_joy_command` on the launch command line.
 
-Before relying on the footpedal, confirm which physical pedal maps to which
-button index — `footpedal_node` numbers buttons by the pedal's raw HID switch
-code, not left-to-right position:
+`footpedal_node` numbers buttons by the pedal's raw HID switch code, not
+left-to-right position. On the yubi1 3-pedal footswitch this was confirmed
+via `ros2 run yubi_bringup identify_footpedal` (press right -> center -> left):
+right=button[2] (accept), center=button[1] (reject), left=button[0] (cancel
+episode) — already reflected in `joy_accept_button` / `joy_reject_button` /
+`joy_cancel_episode_button` in `config/portable/yubi_devices.yaml` and
+`config/stationary/yubi_devices.yaml`.
 
-```bash
-ros2 run yubi_bringup identify_footpedal
-```
-
-Press each pedal one at a time (e.g. right, then center, then left) and read
-off the printed `button[N] pressed` line for each. Compare against
-`joy_accept_button` / `joy_reject_button` / `joy_cancel_episode_button` in
-`config/portable/yubi_devices.yaml` (and `config/stationary/yubi_devices.yaml`)
-to confirm — or update — which pedal triggers which action.
+If you swap in a different footswitch unit/model, re-run
+`ros2 run yubi_bringup identify_footpedal` and press each pedal one at a time
+to re-confirm — or update — the mapping before relying on it.
 
 ### Config layout
 
