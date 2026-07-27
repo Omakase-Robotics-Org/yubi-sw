@@ -80,7 +80,7 @@ services:
       - CYCLONEDDS_URI=file:///root/cyclonedds_profile.xml
       - ROBOT_VARIANT=${ROBOT_VARIANT:-stationary}
     entrypoint: /root/ros_entrypoint.sh
-    command: ros2 launch yubi_bringup yubi_data_collection.launch.py
+    command: ros2 launch yubi_bringup yubi_data_collection.launch.py joy_remap_topic:=/portable_joy_command
     volumes:
       # Source overlays for live edits — these directories are also COPYed into
       # the image at build time, so the container runs from the image when

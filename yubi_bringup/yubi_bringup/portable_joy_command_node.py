@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Aggregate portable input devices into a unified Joy stream.
 
-Subscribes to per-device button states (left/right gripper double-click, Quest controllers)
-and publishes them as a single `sensor_msgs/Joy` topic with a fixed button
-layout.
+Subscribes to per-device button states (left/right gripper double-click, Quest
+controllers, and the USB footpedal when present) and publishes them as a single
+`sensor_msgs/Joy` topic with a fixed button layout. The footpedal is folded in
+element-wise so a plugged-in pedal drives the same state machine as the glove
+double-click; when no pedal is connected its topic simply stays silent.
 
 Publishes:
   * ``/portable_joy_command``                      (sensor_msgs/Joy)
@@ -35,6 +37,7 @@ _TOPIC_PARAMS: Tuple[Tuple[str, str], ...] = (
     ("right_double_click_topic", "/yubi/gripper/right/double_click_state"),
     ("left_quest_topic", "/quest/controller/left/joy"),
     ("right_quest_topic", "/quest/controller/right/joy"),
+    ("footpedal_topic", "/footpedal_states"),
 )
 
 class PortableJoyCommandNode(Node):
@@ -50,7 +53,10 @@ class PortableJoyCommandNode(Node):
         self._a_button_state = 0
         self._b_button_state = 0
         self._x_button_state = 0
-        
+        # footpedal buttons, same index convention as the published Joy
+        # (index 0 = cancel, 1 = reject, 2 = accept). All-zero when unplugged.
+        self._footpedal_buttons = [0] * _NUM_BUTTONS
+
         # Aggregated buttons
         self._button_states = [0] * _NUM_BUTTONS
         
@@ -94,7 +100,16 @@ class PortableJoyCommandNode(Node):
             self._right_quest_state_callback,
             qos,
         )
-    
+
+        # Footpedal publishes RELIABLE/VOLATILE, so a default (reliable) depth-10
+        # subscription matches. Absent hardware = no messages, no effect.
+        self._footpedal_subscriber = self.create_subscription(
+            Joy,
+            self.get_parameter("footpedal_topic").value,
+            self._footpedal_state_callback,
+            10,
+        )
+
     # Callbacks. Each updates its own state and trigger publish
     def _left_double_click_state_callback(self, msg: Joy) -> None:
         self._left_double_click = int(msg.buttons[0]) if msg.buttons else 0
@@ -113,13 +128,29 @@ class PortableJoyCommandNode(Node):
         self._b_button_state = int(msg.buttons[1]) if msg.buttons else 0
         self._publish_portable_joy_command()
 
+    def _footpedal_state_callback(self, msg: Joy) -> None:
+        # Copy the pedal's buttons element-wise (accept/reject/cancel share the
+        # published layout); pad/truncate to the fixed button count.
+        self._footpedal_buttons = [
+            int(msg.buttons[i]) if i < len(msg.buttons) else 0
+            for i in range(_NUM_BUTTONS)
+        ]
+        self._publish_portable_joy_command()
+
     # Publish joy message
     def _publish_portable_joy_command(self) -> None:
         self._button_states[_BTN_DOUBLE_CLICK_OR_QUEST_A] = (
-            self._left_double_click | self._right_double_click | self._a_button_state
+            self._left_double_click
+            | self._right_double_click
+            | self._a_button_state
+            | self._footpedal_buttons[_BTN_DOUBLE_CLICK_OR_QUEST_A]
         )
-        self._button_states[_BTN_QUEST_B] = self._b_button_state
-        self._button_states[_BTN_QUEST_X] = self._x_button_state
+        self._button_states[_BTN_QUEST_B] = (
+            self._b_button_state | self._footpedal_buttons[_BTN_QUEST_B]
+        )
+        self._button_states[_BTN_QUEST_X] = (
+            self._x_button_state | self._footpedal_buttons[_BTN_QUEST_X]
+        )
 
         joy = Joy()
         joy.header.stamp = self.get_clock().now().to_msg()
