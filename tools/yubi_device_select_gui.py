@@ -414,6 +414,14 @@ def _run_gui(args: argparse.Namespace) -> None:
     from matplotlib.figure import Figure
     from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+    def enable_tk_input_methods(root: "tk.Tk") -> None:
+        """Best-effort XIM enablement for Japanese/Korean/Chinese input on X11."""
+        try:
+            if root.tk.call("tk", "windowingsystem") == "x11":
+                root.tk.call("tk", "useinputmethods", True)
+        except Exception:
+            pass
+
     class ScrollableFrame(ttk.Frame):
         """Vertical scrollbar wrapper to keep the UI usable on small displays."""
 
@@ -1023,11 +1031,13 @@ def _run_gui(args: argparse.Namespace) -> None:
         for d in esp_devs:
             msg += f"  - {d.device} serial={d.serial} location={d.location}\n"
         root = tk.Tk()
+        enable_tk_input_methods(root)
         root.withdraw()
         messagebox.showerror("ESP32 device count error", msg)
         raise SystemExit(3)
 
     root = tk.Tk()
+    enable_tk_input_methods(root)
     App(root, cam_devs, esp_devs[0], esp_devs[1], args.baud, args.variant)
     root.mainloop()
 
