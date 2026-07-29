@@ -7,6 +7,8 @@ set -euo pipefail
 # 3 USB cameras (same VID/PID); 'stationary' expects 2.
 # -----------------------
 VARIANT="${ROBOT_VARIANT:-stationary}"
+CAM_VID="${YUBI_CAM_VID:-32e4}"
+CAM_PID="${YUBI_CAM_PID:-9230}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --variant)
@@ -18,9 +20,29 @@ while [[ $# -gt 0 ]]; do
       VARIANT="${1#--variant=}"
       shift
       ;;
+    --cam-vid)
+      [[ $# -ge 2 ]] || { echo "ERROR: --cam-vid requires an argument"; exit 2; }
+      CAM_VID="${2,,}"
+      shift 2
+      ;;
+    --cam-vid=*)
+      CAM_VID="${1#--cam-vid=}"
+      CAM_VID="${CAM_VID,,}"
+      shift
+      ;;
+    --cam-pid)
+      [[ $# -ge 2 ]] || { echo "ERROR: --cam-pid requires an argument"; exit 2; }
+      CAM_PID="${2,,}"
+      shift 2
+      ;;
+    --cam-pid=*)
+      CAM_PID="${1#--cam-pid=}"
+      CAM_PID="${CAM_PID,,}"
+      shift
+      ;;
     -h|--help)
       cat <<'USAGE'
-Usage: sudo -E ./tools/yubi_udev_setup.sh [--variant stationary|portable]
+Usage: sudo -E ./tools/yubi_udev_setup.sh [--variant stationary|portable] [--cam-vid HEX] [--cam-pid HEX]
 
 Calibrates the gripper encoders and writes /etc/udev/rules.d/99-yubi-devices.rules.
 
@@ -29,6 +51,10 @@ Variant selection (precedence: CLI flag > $ROBOT_VARIANT env var > stationary):
   portable    expects 3 USB cameras (left, right, center/head) — the head
               camera is the same USB model as the hands, so we use the
               gripper L/R USB-hub topology to identify which is which.
+
+Camera USB ID selection (precedence: CLI flag > env var > default):
+  --cam-vid / $YUBI_CAM_VID   default: 32e4
+  --cam-pid / $YUBI_CAM_PID   default: 9230
 USAGE
       exit 0
       ;;
@@ -82,8 +108,6 @@ fi
 # -----------------------
 # Camera (UVC) target
 # -----------------------
-CAM_VID="32e4"
-CAM_PID="9230"
 CAM_LEFT_SYMLINK="yubi_left_camera"
 CAM_RIGHT_SYMLINK="yubi_right_camera"
 CAM_CENTER_SYMLINK="yubi_center_camera"
@@ -125,6 +149,34 @@ if [[ -n "${SUDO_USER:-}" ]]; then
   fi
 fi
 
+prepare_ime_for_tk_gui() {
+  # Tk still uses the XIM path on Linux, including X11 apps running under
+  # Xwayland in a Wayland session. GNOME often starts ibus-daemon without
+  # --xim on Wayland, which breaks Japanese IME in Tk apps.
+  export XMODIFIERS="${XMODIFIERS:-@im=ibus}"
+  export GTK_IM_MODULE="${GTK_IM_MODULE:-ibus}"
+  export QT_IM_MODULE="${QT_IM_MODULE:-ibus}"
+
+  if [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]] && command -v ibus-daemon >/dev/null 2>&1; then
+    if ! pgrep -u "${SUDO_USER:-$USER}" -f 'ibus-daemon.*--xim' >/dev/null 2>&1; then
+      local run_as=()
+      if [[ -n "${SUDO_USER:-}" ]]; then
+        run_as=(sudo -u "$SUDO_USER" env DISPLAY="$DISPLAY")
+        if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+          run_as+=(DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS")
+        fi
+        if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
+          run_as+=(WAYLAND_DISPLAY="$WAYLAND_DISPLAY")
+        fi
+        if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+          run_as+=(XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR")
+        fi
+      fi
+      "${run_as[@]}" ibus-daemon --daemonize --replace --xim >/dev/null 2>&1 || true
+    fi
+  fi
+}
+
 APT_UPDATED=0
 
 apt_install() {
@@ -140,7 +192,15 @@ apt_install() {
     apt-get update
     APT_UPDATED=1
   fi
-  DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg"
+  if ! DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg"; then
+    cat >&2 <<EOF
+WARN: apt could not install '$pkg'.
+      This often happens when the host 'python3' is not the distro-default ABI
+      (for example, Python 3.12 on Ubuntu 22.04/Jammy, whose apt packages are
+      built for Python 3.10). Falling back to pip for the matching module.
+EOF
+    return 1
+  fi
 }
 
 ensure_pip() {
@@ -195,6 +255,41 @@ get_prop() {
   grep -E "^${key}=" <<<"$info" | head -n1 | cut -d= -f2- || true
 }
 
+print_camera_diagnostics() {
+  echo
+  echo "Camera diagnostics:"
+  local found_any=0
+  for dev in /dev/video*; do
+    [[ -e "$dev" ]] || continue
+    found_any=1
+    local info idx_path idx v p id_path
+    idx_path="/sys/class/video4linux/$(basename "$dev")/index"
+    idx="?"
+    [[ -f "$idx_path" ]] && idx="$(cat "$idx_path")"
+    info="$(udevadm info --query=property --name="$dev" 2>/dev/null || true)"
+    v="$(get_prop "$info" "ID_VENDOR_ID")"
+    p="$(get_prop "$info" "ID_MODEL_ID")"
+    id_path="$(get_prop "$info" "ID_PATH")"
+    if [[ -z "$id_path" ]]; then
+      id_path="$(get_prop "$info" "ID_PATH_TAG")"
+    fi
+    echo "  $dev  index=$idx  vid:pid=${v:-unknown}:${p:-unknown}  path=${id_path:-unknown}"
+  done
+  if [[ $found_any -eq 0 ]]; then
+    echo "  No /dev/video* devices found."
+  fi
+
+  if command -v lsusb >/dev/null 2>&1; then
+    echo
+    echo "lsusb:"
+    lsusb || true
+  fi
+
+  echo
+  echo "If your cameras use a different VID/PID, re-run with:"
+  echo "  sudo -E bash yubi_udev_setup.sh --variant $VARIANT --cam-vid <vid> --cam-pid <pid>"
+}
+
 # -----------------------
 # Camera detection: /dev/video* with index==0, matching VID/PID
 # -----------------------
@@ -223,6 +318,7 @@ done
 if [[ ${#cam_candidates[@]} -ne $EXPECTED_CAM_COUNT ]]; then
   echo "ERROR: variant=$VARIANT expects exactly $EXPECTED_CAM_COUNT cameras (VID:PID=$CAM_VID:$CAM_PID index=0), found ${#cam_candidates[@]}."
   printf '  %s\n' "${cam_candidates[@]:-}"
+  print_camera_diagnostics
   exit 3
 fi
 
@@ -261,6 +357,7 @@ if [[ ! -f "$GUI" ]]; then
 fi
 
 echo "Launching GUI..."
+prepare_ime_for_tk_gui
 GUI_ARGS=(
   --cam-vid "$CAM_VID" --cam-pid "$CAM_PID"
   --cam1 "$cam1" --cam2 "$cam2"

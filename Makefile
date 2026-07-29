@@ -16,7 +16,7 @@ YUBI_GIT_BRANCH := $(shell git -C $(MAKEFILE_DIR) rev-parse --abbrev-ref HEAD)
 YUBI_CORE_GIT_HASH := $(shell git -C $(MAKEFILE_DIR)/yubi-core rev-parse HEAD)
 YUBI_CORE_GIT_BRANCH := $(shell git -C $(MAKEFILE_DIR)/yubi-core rev-parse --abbrev-ref HEAD)
 
-.PHONY: help lint test test-config build-config docker docker-yubi docker-yubi-core
+.PHONY: help lint test test-config bootstrap-local build-config docker docker-yubi docker-yubi-core
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -38,6 +38,9 @@ test-config: ## Run only build_runtime_configs tests (subset of test)
 	cd $(MAKEFILE_DIR)/yubi_bringup && uvx --with pyyaml pytest test/test_build_runtime_configs.py -v
 
 # ── Config ───────────────────────────────────────────────────────
+
+bootstrap-local: ## Create .env + local config templates and generate runtime config
+	python3 $(MAKEFILE_DIR)/tools/bootstrap_local.py --variant $${ROBOT_VARIANT:-stationary}
 
 build-config: ## Generate config/_runtime/<variant>/ from common + <variant> [+ local] overlays
 	python3 $(MAKEFILE_DIR)/yubi_bringup/tools/build_runtime_configs.py --variant $${ROBOT_VARIANT:-stationary} --with-local
