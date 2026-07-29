@@ -1,21 +1,19 @@
-# yubi1 operator startup files
+# yubi1 operator files
 
-One-click startup assets for the **yubi1** data-collection workstation. They let the
-on-site operator launch the whole YUBI stack with a single double-click — no terminal.
+**The startup launcher no longer lives here.** `deploy/yubi1/start-yubi.sh` and
+`deploy/yubi1/Start-YUBI.desktop` were a yubi1-specific fork with hard-coded
+`/home/omakase1/...` paths. They have been folded into the single box-agnostic
+launcher and removed (recoverable from git history):
+
+- canonical launcher: **`deploy/start-yubi.sh`**
+- canonical `.desktop`: **`deploy/Start-YUBI.desktop`**
+- install it on any box: **`./deploy/install-launcher.sh`**
+
+See `deploy/SETUP.md` §4. What remains in this directory is genuinely
+yubi1-specific: the S3 uploader.
 
 ## Files
 
-- `start-yubi.sh` — the one-click startup script. It:
-  1. (re)starts the `yubi-sw` and `yubi-app` docker compose stacks;
-  2. checks the Quest headset IP from the bringup config and, if it doesn't ping,
-     prompts the operator via a `zenity` dialog to enter the IP shown on the Quest's
-     YUBI-app screen, then rewrites the config in place;
-  3. checks the 6000pro LAN sync link (`10.10.10.2`) and warns if the data-sync
-     target is unreachable;
-  4. waits for the web app on `:3000` and opens the recording UI + dashboard.
-  All progress is mirrored to `~/yubi-start.log` and surfaced as desktop
-  notifications (`notify-send`).
-- `Start-YUBI.desktop` — the GNOME launcher that runs `start-yubi.sh`.
 - `yubi_s3_direct.py` / `yubi_s3_direct.sh` — **S3 uploader** (laptop-direct). Reads
   recorded episodes from the local MinIO via its S3 API and streams each object to
   AWS S3 (`omakase-robotics-data`) using short-lived creds from the AWS IoT
@@ -58,25 +56,16 @@ partition path), so S3 mirrors the collection partition layout for downstream in
 
 ## Canonical deployment
 
-The canonical copies live on **yubi1** at:
-
-- `~/Desktop/start-yubi.sh`
-- `~/Desktop/Start-YUBI.desktop`
-
-The copies in this repo are the version-controlled source of truth. When you change
-them here, redeploy to `~/Desktop/` on yubi1.
+The launcher's source of truth is `deploy/start-yubi.sh` in this repo; the Desktop
+copies on every box are installed from it by `deploy/install-launcher.sh`. Never
+edit `~/Desktop/start-yubi.sh` directly — change the repo copy, pull, re-run the
+installer.
 
 ## GNOME requirements
 
-For GNOME to treat the launcher as a trusted, double-clickable app icon (rather than
-showing it as a text file or a "Untrusted application launcher" warning), after
-copying the files to `~/Desktop/` you must:
-
-```sh
-chmod +x ~/Desktop/start-yubi.sh
-chmod +x ~/Desktop/Start-YUBI.desktop
-gio set ~/Desktop/Start-YUBI.desktop metadata::trusted true
-```
+`deploy/install-launcher.sh` already does the `chmod +x` and the
+`gio set ... metadata::trusted true` that GNOME needs before it will treat the
+Desktop file as a trusted, double-clickable app icon rather than a text file.
 
 `Terminal=false` in the `.desktop` file is **intentional** — the operator should not
 see a terminal window. The script logs to `~/yubi-start.log` and reports via desktop
