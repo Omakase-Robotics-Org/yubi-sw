@@ -64,7 +64,8 @@ task_command_dispatch_node:
     #
     # /portable_joy_command (gripper double-click + Quest controller buttons,
     # see yubi_bringup/portable_joy_command_node.py) uses the same button
-    # layout and remains available via joy_remap_topic:=/portable_joy_command.
+    # layout. A portable box has no pedal, so it is this variant's input:
+    joy_source_topic: "/portable_joy_command"
     joy_accept_button: 2   # right pedal
     joy_reject_button: 1   # center pedal
     joy_cancel_episode_button: 0   # left pedal

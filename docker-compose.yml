@@ -80,6 +80,15 @@ services:
       - CYCLONEDDS_URI=file:///root/cyclonedds_profile.xml
       - ROBOT_VARIANT=${ROBOT_VARIANT:-stationary}
     entrypoint: /root/ros_entrypoint.sh
+    # TRANSITIONAL: the task input is now resolved per box from
+    # config/{common,<variant>,local}/yubi_devices.yaml (see
+    # resolve_task_input_topic in yubi_bringup/launch_registry.py). This
+    # argument still overrides that, and is kept only until every box's
+    # yubi:latest image has been rebuilt with the resolving launch file --
+    # dropping it before then would silently hand a stationary box the
+    # footpedal, because the old image's launch default is /footpedal_states.
+    # Remove this argument (one line, no other change) once the fleet is
+    # rebuilt; the config layer already carries the same values.
     command: ros2 launch yubi_bringup yubi_data_collection.launch.py joy_remap_topic:=/portable_joy_command
     volumes:
       # Source overlays for live edits — these directories are also COPYed into

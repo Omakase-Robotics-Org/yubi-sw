@@ -39,6 +39,13 @@ gripper_double_click_node:
 portable_joy_command_node:
   ros__parameters: {}
 
+# ...and consume that aggregated stream instead of the footpedal. Declaring
+# portable_joy_command_node above would already imply this, but pin it
+# explicitly so the box's input is stated rather than inferred.
+task_command_dispatch_node:
+  ros__parameters:
+    joy_source_topic: "/portable_joy_command"
+
 # common/ requests 120 Hz from the hand cameras; the portable overlay pinned
 # 60 Hz and that is what this unit has always run (they deliver ~59 Hz, which
 # is why local/recording_gate.yaml relaxes the warn threshold to 55). Pin 60
