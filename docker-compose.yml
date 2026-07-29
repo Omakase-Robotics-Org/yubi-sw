@@ -95,6 +95,13 @@ services:
       - /dev/:/dev/
       - /tmp/.X11-unix:/tmp/.X11-unix
       - ./yubi_bringup/docker/cyclonedds_profile.xml:/root/cyclonedds_profile.xml
+      # The launch files read config/{common,<variant>,local}/yubi_devices.yaml
+      # from the *install* space, which is baked into the image at build time.
+      # Without this mount, editing config/local/ on the host has no effect
+      # until the image is rebuilt — a per-host override layer that silently
+      # does nothing. (yubi_core gets the same treatment via the
+      # config/_runtime/<variant>/ mounts below.)
+      - ./yubi_bringup/config/local/:/root/ros2_ws/install/yubi_bringup/share/yubi_bringup/config/local/
     restart: unless-stopped
 
   yubi_core_builder:
