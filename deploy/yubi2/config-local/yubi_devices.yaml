@@ -9,8 +9,13 @@
 #
 # Last synced from the box: 2026-07-29.
 #
-# No task-input pin is needed here: yubi2 runs ROBOT_VARIANT=portable and
-# config/portable/yubi_devices.yaml already selects /portable_joy_command.
+# yubi2 runs ROBOT_VARIANT=stationary as of 2026-07-29, and it has no foot
+# pedal, so this layer must supply everything config/portable/ used to give
+# it: the two presence markers that publish /portable_joy_command, the
+# joy_source_topic pin, and the 60 Hz hand-camera pins.
+
+# Per-host overrides for this machine (yubi2).
+# quest_ip is normally set via the start-yubi.sh dialog; 0.0.0.0 = not yet set.
 
 # Per-host overrides for this machine (yubi2).
 # quest_ip is normally set via the start-yubi.sh dialog; 0.0.0.0 = not yet set.
@@ -32,3 +37,38 @@ quest_bridge_node:
     enable_sync: true
     publish_tf: true
     tf_publish_rate: 1.0
+
+# --- yubi2 is being switched to ROBOT_VARIANT=stationary (2026-07-29) -------
+# Everything below is provided by config/portable/ and NOT by
+# config/stationary/, so it has to be restated per-host or the variant flip
+# would silently change how this box behaves.
+
+# The operators accept/reject/cancel with the gripper double-click. These two
+# nodes are what publish /portable_joy_command; the stationary overlay does not
+# declare them, and the presence-driven launch registry only spawns a node
+# whose key appears in a merged yubi_devices.yaml. Without them the task input
+# is dead -- and yubi2 has no foot pedal to fall back on.
+gripper_double_click_node:
+  ros__parameters: {}
+
+portable_joy_command_node:
+  ros__parameters: {}
+
+# ...and consume that aggregated stream rather than the footpedal. Declaring
+# the aggregator above already implies this via resolve_task_input_topic(),
+# but pin it so this box's input is stated rather than inferred.
+task_command_dispatch_node:
+  ros__parameters:
+    joy_source_topic: "/portable_joy_command"
+
+# common/ asks the hand cameras for 120 Hz; the portable overlay pinned 60 and
+# that is what this unit has always run (they deliver ~59-63 Hz, which is why
+# local/recording_gate.yaml relaxes the warn threshold to 50). Pin 60 so the
+# variant flip does not change the cameras.
+left_camera/usb_cam:
+  ros__parameters:
+    framerate: 60.0
+
+right_camera/usb_cam:
+  ros__parameters:
+    framerate: 60.0

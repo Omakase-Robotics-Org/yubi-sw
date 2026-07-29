@@ -9,7 +9,7 @@
 #   docker compose up config-init && docker compose restart yubi_core
 #
 # Verify before the first recording — the startup log must show the resolved
-# values, and `ros2 param get /record_manager site` must print meguro:
+# values, and `ros2 param get /record_manager site` must print tokyo:
 #
 #   docker logs yubi_core | grep -i "resolved"
 
@@ -21,7 +21,9 @@
 
     # --- Recording provenance ----------------------------------------------
     # These become the org= and site= segments of every recording's object key.
-    # yubi1, yubi2 and yubi3 are all in Meguro (confirmed by Shu 2026-07-29).
+    # The boxes are in the Meguro office, Tokyo. The object key is ordered
+    # org / site / location, broad to narrow, so site is the region and
+    # location is the office (Shu 2026-07-29).
     #
     # Both are pinned rather than left to the backend because:
     #   * the yubi-core image on the boxes resolves site from nothing at all
@@ -37,11 +39,11 @@
     # Also rename this box's backend rows to match, so the two layers agree:
     #   organization -> "Omakase Robotics"   (PUT /api/organizations/{id},
     #                                         field is display_name)
-    #   site         -> "Meguro"             (PUT /api/sites/{id})
+    #   site         -> "Tokyo"              (PUT /api/sites/{id})
     #   location     -> "Meguro", and assign the robot to it
     #                                        (PUT /api/robots/{id} location_id)
     runner_organization: "omakase-robotics"
-    site: "meguro"
+    site: "tokyo"
 
     # location is intentionally NOT pinned — it resolves from the backend and
     # is the field the web UI manages. Same mechanism as yubi1 and yubi2.

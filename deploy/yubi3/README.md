@@ -20,7 +20,7 @@ yubi2 did — that is what put thousands of objects under `org=unknown` and
 
 2. Rename this box's backend rows to match the pins, so the config and backend
    layers agree (see the template for the exact endpoints): organization
-   `Omakase Robotics`, site `Meguro`, location `Meguro` with the robot assigned
+   `Omakase Robotics`, site `Tokyo`, location `Meguro` with the robot assigned
    to it.
 
 3. Apply and verify — **before** recording anything:
@@ -33,11 +33,14 @@ yubi2 did — that is what put thousands of objects under `org=unknown` and
      ros2 param get /record_manager runner_organization'
    ```
 
-   Expect `meguro` and `omakase-robotics`. The key should read
-   `org=omakase-robotics/site=meguro/location=meguro/…`.
+   Expect `tokyo` and `omakase-robotics`. The key should read
+   `org=omakase-robotics/site=tokyo/location=meguro/…`.
 
 `unset DISPLAY` matters: with a dead X display, `pactl`/ROS CLI calls block for
 ~130 s on a libpulse TCP timeout.
+
+Set `ROBOT_VARIANT=stationary` in `.env` (all three boxes run the stationary
+profile as of 2026-07-29).
 
 ## Task input
 

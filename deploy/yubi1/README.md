@@ -42,11 +42,13 @@ key, so these two lines have to be re-added by hand:
 
 ```yaml
     runner_organization: "omakase-robotics"   # -> org=omakase-robotics
-    site: "meguro"                            # -> site=meguro
+    site: "tokyo"                             # -> site=tokyo
 ```
 
 `location:` is deliberately left empty so it resolves from the backend — it is
-the field the web UI manages, and the robot is assigned to location `meguro`.
+the field the web UI manages, and the robot is assigned to location `Meguro`
+(-> `location=meguro`). The key is ordered org / site / location, broad to
+narrow: site is the region, location is the office.
 
 Why pinned rather than left to the backend:
 
@@ -59,7 +61,7 @@ Why pinned rather than left to the backend:
   the `yubi-core` image is rebuilt with #2. One prefix boundary, not two.
 
 The backend rows were renamed to agree with the pins (organization
-`Omakase Robotics`, site `Meguro`, both of which normalise to the same key
+`Omakase Robotics`, site `Tokyo`, location `Meguro`, which normalise to the same key
 segments), so the two layers cannot drift apart.
 
 Two notes on why the local layer looks the way it does:
