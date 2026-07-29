@@ -1,0 +1,22 @@
+# yubi1 — snapshot of yubi_bringup/config/local/recording_gate.yaml
+# See config-local/yubi_devices.yaml for why this snapshot exists.
+# Last synced from the box: 2026-07-29.
+#
+# Hand cams run ~59 Hz against a 60 Hz warn threshold -> relax to 55
+# (the stop threshold of 30 is untouched). Head camera = RealSense
+# (/camera/camera/*), not the removed center USB cam.
+groups:
+  health:
+    conditions:
+      left_camera_warn: {min_rate_hz: 55.0}
+      right_camera_warn: {min_rate_hz: 55.0}
+      head_camera_timeout_warn: {topic: /camera/camera/color/image_raw/compressed}
+      head_camera_timeout_stop: {topic: /camera/camera/color/image_raw/compressed}
+      head_camera_warn:
+        topic: /camera/camera/color/image_raw/compressed
+        min_rate_hz: 10.0
+        reason: "Head camera (RealSense) frame rate below 10 Hz ({detail})"
+      head_camera_stop:
+        topic: /camera/camera/color/image_raw/compressed
+        min_rate_hz: 5.0
+        reason: "Head camera (RealSense) frame rate below 5 Hz ({detail})"

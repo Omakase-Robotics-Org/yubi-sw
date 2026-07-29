@@ -30,12 +30,14 @@ class DoubleClickDetector:
         closed_thresh: float = np.deg2rad(10),     # ~0.17 rad
         hysteresis: float = np.deg2rad(5),         # gap between open/closed
         min_closed_sec: float = 0.02,              # ignore micro‑spikes (~2 frames at 100fps)
+        max_closed_sec: float = 0.5,               # releases after long holds (real grasps) are not clicks
     ):
         self.click_window_sec = click_window_sec
         self.cooldown_sec = cooldown_sec
         self.closed_thresh = closed_thresh
         self.open_thresh = closed_thresh + hysteresis
         self.min_closed_sec = min_closed_sec
+        self.max_closed_sec = max_closed_sec
 
         # State
         self._last_update_time = None
@@ -80,7 +82,7 @@ class DoubleClickDetector:
                 # Only count it as a click if the gripper really stayed closed
                 # at least min_closed_sec
                 closed_duration = current_time - self._closed_start
-                if closed_duration >= self.min_closed_sec:
+                if self.min_closed_sec <= closed_duration <= self.max_closed_sec:
                     events.append(Event.CLICK)
                     self._recent_clicks.append(current_time)
                 self._state = "open"

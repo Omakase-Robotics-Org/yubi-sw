@@ -1,0 +1,52 @@
+# yubi1 — snapshot of yubi_bringup/config/local/yubi_devices.yaml
+#
+# config/local/*.yaml is gitignored (it is the per-host layer and may hold
+# per-deployment values), so the live file cannot be committed. This snapshot
+# exists so a reimage of yubi1 does not lose the box's actual settings.
+# Copy it back with:
+#
+#   cp deploy/yubi1/config-local/yubi_devices.yaml \
+#      yubi_bringup/config/local/yubi_devices.yaml
+#
+# Last synced from the box: 2026-07-29.
+
+# Quest headset address. Changes whenever the Wi-Fi changes; start-yubi.sh
+# pings it and prompts the operator for a new one when it is unreachable.
+quest_bridge_node:
+  ros__parameters:
+    quest_ip: "172.16.1.9"
+
+# RealSense D435 head camera (replaces the center USB cam, 2026-07-28)
+/camera/camera:
+  ros__parameters:
+    enable_color: true
+    rgb_camera.color_profile: "640x480x30"
+    enable_depth: false
+    align_depth.enable: false
+    enable_sync: true
+    publish_tf: true
+    tf_publish_rate: 1.0
+
+# --- yubi1 runs ROBOT_VARIANT=stationary (2026-07-29) ---
+# The stationary overlay does not declare these two nodes (they live in
+# config/portable/), but the operators accept/reject episodes with the gripper
+# double-click, which is published by them. Declaring them here keeps the
+# glove input alive on a stationary profile. See deploy/yubi1/README.md
+# "Host profile" for why this is a per-host override and not a variant change.
+gripper_double_click_node:
+  ros__parameters: {}
+
+portable_joy_command_node:
+  ros__parameters: {}
+
+# common/ requests 120 Hz from the hand cameras; the portable overlay pinned
+# 60 Hz and that is what this unit has always run (they deliver ~59 Hz, which
+# is why local/recording_gate.yaml relaxes the warn threshold to 55). Pin 60
+# here so switching the variant does not change camera behaviour.
+left_camera/usb_cam:
+  ros__parameters:
+    framerate: 60.0
+
+right_camera/usb_cam:
+  ros__parameters:
+    framerate: 60.0
