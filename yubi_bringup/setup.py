@@ -41,6 +41,7 @@ setup(
             "encoder_node = yubi_bringup.encoder_node:main",
             "gripper_double_click_node = yubi_bringup.gripper_double_click_node:main",
             "portable_joy_command_node = yubi_bringup.portable_joy_command_node:main",
+            "identify_footpedal = yubi_bringup.footpedal_identify_node:main",
         ],
     },
 )

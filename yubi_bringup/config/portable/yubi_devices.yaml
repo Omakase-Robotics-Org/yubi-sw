@@ -1,7 +1,9 @@
 # Portable — overlay onto common/yubi_devices.yaml
-# Adds: center_camera (USB cam replacing RealSense), task_command_dispatch_node
-# (Quest controller button mapping). No footpedal_node section — that node
-# is intentionally skipped (no footpedal hardware in portable variant).
+# Adds: center_camera (USB cam replacing RealSense), footpedal_node (episode
+# start/accept/reject/cancel input — hands stay on the grippers), and
+# task_command_dispatch_node (button mapping, shared across footpedal /
+# gripper double-click / Quest controller inputs since all three publish the
+# same 3-button layout).
 
 center_camera/usb_cam:
   ros__parameters:
@@ -48,17 +50,24 @@ right_camera/usb_cam:
       white_balance_automatic: true
       auto_exposure: 3
 
+footpedal_node:
+  ros__parameters: {}
+
 task_command_dispatch_node:
   ros__parameters:
-    # Portable input source: /portable_joy_command (aggregated from left/right
-    # gripper double-click + Quest controller buttons by portable_joy_command_node).
-    # Button layout — see yubi_bringup/portable_joy_command_node.py:
-    #   [0] quest_x
-    #   [1] quest_b
-    #   [2] gripper double-click | quest_a
-    joy_accept_button: 2
-    joy_reject_button: 1
-    joy_cancel_episode_button: 0
+    # Default portable input source is /footpedal_states (see joy_remap_topic
+    # in yubi_data_collection.launch.py). footpedal_node numbers buttons by
+    # the pedal's raw HID switch code, not left/right position — confirmed on
+    # the yubi1 3-pedal footswitch via `ros2 run yubi_bringup identify_footpedal`
+    # (press right -> center -> left): right=button[2], center=button[1],
+    # left=button[0]. Re-verify with a different footswitch unit/model.
+    #
+    # /portable_joy_command (gripper double-click + Quest controller buttons,
+    # see yubi_bringup/portable_joy_command_node.py) uses the same button
+    # layout and remains available via joy_remap_topic:=/portable_joy_command.
+    joy_accept_button: 2   # right pedal
+    joy_reject_button: 1   # center pedal
+    joy_cancel_episode_button: 0   # left pedal
     joy_rewind_button: -1
 
 

@@ -7,6 +7,10 @@ footpedal_node:
 
 task_command_dispatch_node:
   ros__parameters:
+    # footpedal_node numbers buttons by the pedal's raw HID switch code, not
+    # left/right position — verify per-unit with
+    # `ros2 run yubi_bringup identify_footpedal` (see config/portable/yubi_devices.yaml
+    # for the yubi1 footswitch's confirmed right/center/left mapping).
     joy_accept_button: 2
     joy_reject_button: 1
     joy_cancel_episode_button: 0

@@ -334,11 +334,11 @@ class TestPortableInvariants:
                 f"portable yubi_devices.yaml has premature gripper param: {key}"
             )
 
-    def test_portable_no_footpedal_node(self):
-        """Portable variant should not bring up footpedal_node (no footpedal hw)."""
+    def test_portable_has_footpedal_node(self):
+        """Portable variant brings up footpedal_node as its default task input."""
         with (CONFIG_ROOT / "portable" / "yubi_devices.yaml").open() as f:
             data = yaml.safe_load(f)
-        assert "footpedal_node" not in data
+        assert data.get("footpedal_node") == {"ros__parameters": {}}
 
 
 # ---------------------------------------------------------------------------

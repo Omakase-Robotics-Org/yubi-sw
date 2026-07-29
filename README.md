@@ -356,9 +356,26 @@ via `ros2 launch ... robot_variant:=portable`).
 | Variant | Center camera | Task input | `robot_type` |
 |---|---|---|---|
 | `stationary` | RealSense (`/camera/camera/*`) | Footpedal | `"yubi"` |
-| `portable`   | USB cam (`/center_camera/*`)   | Quest controller buttons + gripper state | `"yubi_portable"` |
+| `portable`   | USB cam (`/center_camera/*`)   | Footpedal (default) or Quest controller buttons + gripper double-click | `"yubi_portable"` |
 
 Both variants run the encoder node, the two hand USB cameras, and the Quest bridge.
+
+Portable defaults to the footpedal so the operator's hands never have to leave
+the grippers to end/start an episode (a handheld double-click is hard to do
+one-handed). To fall back to gripper double-click + Quest buttons instead, pass
+`joy_remap_topic:=/portable_joy_command` on the launch command line.
+
+`footpedal_node` numbers buttons by the pedal's raw HID switch code, not
+left-to-right position. On the yubi1 3-pedal footswitch this was confirmed
+via `ros2 run yubi_bringup identify_footpedal` (press right -> center -> left):
+right=button[2] (accept), center=button[1] (reject), left=button[0] (cancel
+episode) — already reflected in `joy_accept_button` / `joy_reject_button` /
+`joy_cancel_episode_button` in `config/portable/yubi_devices.yaml` and
+`config/stationary/yubi_devices.yaml`.
+
+If you swap in a different footswitch unit/model, re-run
+`ros2 run yubi_bringup identify_footpedal` and press each pedal one at a time
+to re-confirm — or update — the mapping before relying on it.
 
 ### Config layout
 
