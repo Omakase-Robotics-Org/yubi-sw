@@ -1,0 +1,34 @@
+# yubi2 — snapshot of yubi_bringup/config/local/yubi_devices.yaml
+#
+# config/local/*.yaml is gitignored (it is the per-host layer), so the live
+# file cannot be committed. This snapshot exists so a reimage of yubi2 does not
+# lose the box's actual settings. Copy it back with:
+#
+#   cp deploy/yubi2/config-local/yubi_devices.yaml \
+#      yubi_bringup/config/local/yubi_devices.yaml
+#
+# Last synced from the box: 2026-07-29.
+#
+# No task-input pin is needed here: yubi2 runs ROBOT_VARIANT=portable and
+# config/portable/yubi_devices.yaml already selects /portable_joy_command.
+
+# Per-host overrides for this machine (yubi2).
+# quest_ip is normally set via the start-yubi.sh dialog; 0.0.0.0 = not yet set.
+quest_bridge_node:
+  ros__parameters:
+    quest_ip: "172.16.1.84"
+
+# RealSense D435 head camera (mounted on top; replaces chest/center USB cam)
+/camera/camera:
+  ros__parameters:
+    enable_color: true
+    rgb_camera.color_profile: "640x480x30"
+    enable_depth: false
+    enable_infra1: false
+    enable_infra2: false
+    enable_gyro: false
+    enable_accel: false
+    align_depth.enable: false
+    enable_sync: true
+    publish_tf: true
+    tf_publish_rate: 1.0

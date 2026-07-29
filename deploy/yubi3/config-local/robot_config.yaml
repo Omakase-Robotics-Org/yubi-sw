@@ -1,0 +1,47 @@
+# yubi3 — template for yubi_bringup/config/local/robot_config.yaml
+#
+# yubi3's rig is not built yet and the box was unreachable on 2026-07-29, so
+# this could not be applied live. Copy it into place when the box comes up:
+#
+#   cp deploy/yubi3/config-local/robot_config.yaml \
+#      yubi_bringup/config/local/robot_config.yaml
+#   # then fill in api_key (from the web UI: API Keys page) and re-run:
+#   docker compose up config-init && docker compose restart yubi_core
+#
+# Verify before the first recording — the startup log must show the resolved
+# values, and `ros2 param get /record_manager site` must print meguro:
+#
+#   docker logs yubi_core | grep -i "resolved"
+
+/**:
+  ros__parameters:
+    # FIXME: this box's own API key, created in the web UI (API Keys page).
+    api_key: "WRITE_HERE"
+    base_url: "http://localhost:8000/api"
+
+    # --- Recording provenance ----------------------------------------------
+    # These become the org= and site= segments of every recording's object key.
+    # yubi1, yubi2 and yubi3 are all in Meguro (confirmed by Shu 2026-07-29).
+    #
+    # Both are pinned rather than left to the backend because:
+    #   * the yubi-core image on the boxes resolves site from nothing at all
+    #     until it is rebuilt with the site-resolution fix, so an unpinned
+    #     site writes site=unknown into every key;
+    #   * runner_organization does resolve from the backend, but falls back
+    #     silently to "unknown" when the backend is unreachable at
+    #     record_manager startup — the origin of the thousands of objects
+    #     already sitting under org=unknown in S3.
+    # An explicit config value always wins, so the key is identical before and
+    # after any image rebuild.
+    #
+    # Also rename this box's backend rows to match, so the two layers agree:
+    #   organization -> "Omakase Robotics"   (PUT /api/organizations/{id},
+    #                                         field is display_name)
+    #   site         -> "Meguro"             (PUT /api/sites/{id})
+    #   location     -> "Meguro", and assign the robot to it
+    #                                        (PUT /api/robots/{id} location_id)
+    runner_organization: "omakase-robotics"
+    site: "meguro"
+
+    # location is intentionally NOT pinned — it resolves from the backend and
+    # is the field the web UI manages. Same mechanism as yubi1 and yubi2.
