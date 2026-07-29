@@ -43,7 +43,12 @@ Flash it once per gripper board:
 2. Open [ESP32C6_AS5601.ino](firmware/ESP32C6_AS5601/ESP32C6_AS5601.ino) and set
    `DEVICE_ID` to the side plus a 3-digit index — `L###` for the left gripper,
    `R###` for the right (e.g. `L003` / `R003`).
-3. Upload to the board, then repeat for each gripper.
+3. If you want ready-to-flash sketches for the sample IDs used in this README,
+   open [ESP32C6_AS5601_L003.ino](firmware/ESP32C6_AS5601_L003/ESP32C6_AS5601_L003.ino)
+   for the left gripper and
+   [ESP32C6_AS5601_R003.ino](firmware/ESP32C6_AS5601_R003/ESP32C6_AS5601_R003.ino)
+   for the right gripper.
+4. Upload to the board, then repeat for each gripper.
 
 ### PC setup (operator machine)
 
@@ -60,6 +65,16 @@ Flash it once per gripper board:
    cd tools
    sudo -E bash yubi_udev_setup.sh          # add --variant portable on the portable rig
    ```
+
+   The setup script installs its own GUI dependencies when they are missing.
+   Do not split package names across lines when running `apt` manually:
+   `python3-serial` is one package, not `python3-` plus `serial`.
+
+   If your host uses a non-distro Python build (for example `Python 3.12` on
+   Ubuntu 22.04/Jammy), Ubuntu's `python3-*` GUI packages may be uninstallable
+   because they target the distro Python ABI (`3.10` on Jammy). In that case
+   `tools/yubi_udev_setup.sh` falls back to `pip` automatically; the `apt`
+   error is expected and does not by itself mean the setup failed.
 
    The `--variant` option tells the script which hardware configuration to expect, which sets how many cameras the GUI looks for:
 
