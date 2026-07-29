@@ -12,6 +12,62 @@ launcher and removed (recoverable from git history):
 See `deploy/SETUP.md` §4. What remains in this directory is genuinely
 yubi1-specific: the S3 uploader.
 
+## Host profile (2026-07-29: portable → stationary)
+
+yubi1 runs **`ROBOT_VARIANT=stationary`**. `.env` and `yubi_bringup/config/local/*.yaml`
+are gitignored (they are the per-host layer), so the box's real settings cannot be
+committed as-is and would be lost to a reimage. `config-local/` here is a snapshot
+of them:
+
+| box file (gitignored) | snapshot |
+|---|---|
+| `.env` → `ROBOT_VARIANT=stationary` | this section |
+| `yubi_bringup/config/local/yubi_devices.yaml` | `config-local/yubi_devices.yaml` |
+| `yubi_bringup/config/local/recording_gate.yaml` | `config-local/recording_gate.yaml` |
+| `yubi_bringup/config/local/robot_config.yaml` | **not snapshotted — contains the backend API key** |
+
+Restore after a reimage:
+
+```sh
+sed -i 's/^ROBOT_VARIANT=.*/ROBOT_VARIANT=stationary/' .env
+cp deploy/yubi1/config-local/*.yaml yubi_bringup/config/local/
+# then re-add config/local/robot_config.yaml by hand: api_key + base_url
+# (http://localhost:8000/api), use_recording_gate: false, auto_repeat_episode: false
+```
+
+Two notes on why the local layer looks the way it does:
+
+- **`gripper_double_click_node` / `portable_joy_command_node` presence markers.**
+  The launch registry spawns a node only when its key appears in a merged
+  `yubi_devices.yaml`, and those two keys live in `config/portable/`. The operators
+  accept/reject episodes with the gripper double-click, so a stationary yubi1 still
+  needs them. They are set per-host rather than added to `config/stationary/`
+  because a real yagura stationary box drives the task state machine from the
+  footpedal; making the glove a second input for *every* stationary box is a
+  behaviour change, not a config fix.
+- **Merge gotcha:** `list + list` means **b replaces a**. A plain list in
+  `config/local/` wipes a variant's `__extend__` additions — extend, don't replace.
+
+## Recording provenance (`org=` / `site=` / `location=` in the object key)
+
+Every recording's object key is
+`org=…/site=…/location=…/date=…/task=…/robot_type=…/robot_id=…/ts=…/uuid=…`, built
+from `meta.json`, which `record_manager` fills from `robot_config.yaml` plus
+`GET /robot/me`. Two ways to set them:
+
+1. **Web UI (`:3000`)** — Locations page creates/renames locations; the robot edit
+   dialog assigns the robot to one. The organization name is what the `org=` segment
+   comes from; it is *not* editable in the web UI today (see the fleet notes), so it
+   stays at whatever the DB was seeded with.
+2. **`config/local/robot_config.yaml`** — an explicit `site:`, `location:` or
+   `runner_organization:` always wins over the backend. `"FIXME"` (org, robot_type)
+   and `""` (site, location) mean "ask the backend".
+
+**These values are read once, when `record_manager` starts.** Changing them in the
+UI does not affect a running stack — restart `yubi_core` (`docker compose restart
+yubi_core`) and check the startup log line `Resolved deployment metadata: …` before
+recording.
+
 ## Files
 
 - `yubi_s3_direct.py` / `yubi_s3_direct.sh` — **S3 uploader** (laptop-direct). Reads
