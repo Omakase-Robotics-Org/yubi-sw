@@ -32,8 +32,35 @@ Restore after a reimage:
 sed -i 's/^ROBOT_VARIANT=.*/ROBOT_VARIANT=stationary/' .env
 cp deploy/yubi1/config-local/*.yaml yubi_bringup/config/local/
 # then re-add config/local/robot_config.yaml by hand: api_key + base_url
-# (http://localhost:8000/api), use_recording_gate: false, auto_repeat_episode: false
+# (http://localhost:8000/api), use_recording_gate: false, auto_repeat_episode: false,
+# and the two provenance pins below
 ```
+
+`config/local/robot_config.yaml` also pins the recording provenance (2026-07-29).
+It is the one local file not snapshotted here, because it holds the backend API
+key, so these two lines have to be re-added by hand:
+
+```yaml
+    runner_organization: "omakase-robotics"   # -> org=omakase-robotics
+    site: "meguro"                            # -> site=meguro
+```
+
+`location:` is deliberately left empty so it resolves from the backend — it is
+the field the web UI manages, and the robot is assigned to location `meguro`.
+
+Why pinned rather than left to the backend:
+
+- `site` had no backend resolution at all until yubi-core#2, so it was writing
+  `site=unknown` into every object key.
+- `runner_organization` does resolve from the backend, but when the backend is
+  unreachable at `record_manager` startup it falls back to `"unknown"` — which
+  is where the 20 objects under `org=unknown` came from.
+- An explicit config value always wins, so the key is identical before and after
+  the `yubi-core` image is rebuilt with #2. One prefix boundary, not two.
+
+The backend rows were renamed to agree with the pins (organization
+`Omakase Robotics`, site `Meguro`, both of which normalise to the same key
+segments), so the two layers cannot drift apart.
 
 Two notes on why the local layer looks the way it does:
 
