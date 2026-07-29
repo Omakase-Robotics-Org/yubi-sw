@@ -42,15 +42,32 @@ only in env / the IoT cert. ssh aliases: `yubi1`, `yubi2`, …
   (step 4) prompts for it via a dialog whenever the Quest isn't reachable.
 
 ## 4. Start shortcut (Desktop) — ⚠ EASY TO FORGET (missed on yubi2)
-- Copy `deploy/start-yubi.sh` → `~/Desktop/start-yubi.sh`; `chmod +x`.
-  (It auto-detects the yubi-sw/yubi-app stack dirs, so no per-box path editing.)
-- Copy `deploy/Start-YUBI.desktop` → `~/Desktop/Start-YUBI.desktop`; `chmod +x`;
-  `gio set ~/Desktop/Start-YUBI.desktop metadata::trusted true`. Edit its `Exec=`
-  to the box user's home if needed.
-- What double-clicking it does: (1) prompt Quest IP if unreachable →
-  (2) restart yubi-sw + yubi-app docker stacks → (3) wait for :3000 →
-  (4) open **2 browser windows**: recording UI `localhost:3000/web` + dashboard
-  `localhost:3000/web/dashboard`.
+Run the installer from the checkout — do **not** hand-copy, and do not edit the
+Desktop copy in place (that is how yubi1/yubi2/yubi3 ended up with three
+different launchers by 2026-07-29):
+
+```sh
+./deploy/install-launcher.sh
+```
+
+It installs `deploy/start-yubi.sh` → `~/Desktop/start-yubi.sh`, the `.desktop`
+entry to both `~/Desktop/` and `~/.local/share/applications/`, marks it trusted
+for GNOME, and pins it to the dock. Existing copies are backed up as
+`*.bak-<timestamp>`, never deleted. It is idempotent — re-run it after every
+`git pull` that touches the launcher.
+
+- `Exec=` needs no per-box editing: it is `/bin/bash -lc "exec ~/Desktop/start-yubi.sh"`,
+  and the script auto-detects the yubi-sw/yubi-app stack dirs (nested
+  `~/projects/yubi-sw/yubi-sw` and flat `~/projects/yubi-sw` both work).
+- What double-clicking it does: (0) take a `flock` single-instance lock and exit
+  if a start is already in progress → (1) prompt Quest IP if unreachable →
+  (2) restart yubi-sw + yubi-app docker stacks → (3) warn if the 6000pro LAN
+  sync link is down → (4) wait for :3000 → (5) open **2 browser windows**:
+  recording UI `localhost:3000/web` + dashboard `localhost:3000/web/dashboard`.
+- The `flock` guard is load-bearing: the dock entry never matches a window, so
+  GNOME launches a fresh copy on every click. On 2026-07-29 four copies started
+  within two seconds on yubi1 and their racing `docker compose down` / `up -d`
+  repeatedly destroyed `yubi_core`.
 
 ## Data path
 yubi<N> collect → local MinIO → `~/yubi_s3_direct.py` → S3 `omakase-robotics-data`
