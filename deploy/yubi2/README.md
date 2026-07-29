@@ -1,6 +1,6 @@
 # yubi2
 
-Portable unit (`ROBOT_VARIANT=portable`), flat checkout at `~/projects/yubi-sw`,
+Stationary profile (`ROBOT_VARIANT=stationary`, switched 2026-07-29), flat checkout at `~/projects/yubi-sw`,
 remote `origin`. The launcher is the canonical one — see `deploy/SETUP.md` §4
 and `deploy/install-launcher.sh`.
 
@@ -9,7 +9,7 @@ and `deploy/install-launcher.sh`.
 yubi2's recordings land under:
 
 ```
-org=omakase-robotics/site=meguro/location=meguro/…/robot_type=yubi_portable/robot_id=6c4bef0b-…
+org=omakase-robotics/site=tokyo/location=meguro/…/robot_type=yubi/robot_id=6c4bef0b-…
 ```
 
 Set the same way as yubi1 — org and site pinned in `config/local/robot_config.yaml`,
@@ -17,7 +17,7 @@ location owned by the backend:
 
 ```yaml
     runner_organization: "omakase-robotics"
-    site: "meguro"
+    site: "tokyo"
     # location deliberately unpinned; the robot is assigned to the "Meguro"
     # location row and resolves to location=meguro
 ```
@@ -27,7 +27,7 @@ backend API key. After a reimage those two lines have to be re-added by hand,
 along with `api_key` and `base_url: http://localhost:8000/api`.
 
 The backend rows were renamed to agree with the pins, so the config and backend
-layers cannot drift: organization `Omakase Robotics`, site `Meguro`, location
+layers cannot drift: organization `Omakase Robotics`, site `Tokyo`, location
 `Meguro` (the robot is assigned to it). Renaming an organization needs the
 `org:update` grant and the field is `display_name`, not `name`.
 
@@ -41,5 +41,15 @@ data is deliberately left as-is.
 - `config-local/yubi_devices.yaml` — snapshot of the per-host device overrides
   (gitignored on the box). Quest IP, RealSense head camera.
 
-No task-input pin is needed: yubi2 is portable, and
-`config/portable/yubi_devices.yaml` already selects `/portable_joy_command`.
+**yubi2 has no foot pedal**, so its per-host layer must supply everything the
+stationary overlay does not: the `gripper_double_click_node` /
+`portable_joy_command_node` presence markers, the `joy_source_topic` pin, and
+the 60 Hz hand-camera pins (`common/` asks for 120). Those are in
+`config-local/yubi_devices.yaml`.
+
+**Known wart:** `config/stationary/` declares `footpedal_node`, and a per-host
+layer can currently only turn a node *on*, not off. yubi2 therefore respawn-
+loops `footpedal_node` (~29 restarts/min, `Cannot find footswitch device`).
+Collection is unaffected — the glove path is verified working — but it is
+constant log noise until a node-disable mechanism lands and the image is
+rebuilt.
