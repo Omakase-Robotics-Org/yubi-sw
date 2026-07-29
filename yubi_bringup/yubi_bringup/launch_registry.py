@@ -200,6 +200,70 @@ DATA_COLLECTION_NODE_REGISTRY = [
 NODE_REGISTRY = BRINGUP_NODE_REGISTRY + DATA_COLLECTION_NODE_REGISTRY
 
 
+#: yubi_devices.yaml section and scalar that select a box's task input.
+TASK_DISPATCH_KEY = "task_command_dispatch_node"
+TASK_INPUT_PARAM = "joy_source_topic"
+#: Published by portable_joy_command_node (gripper double-click + Quest buttons).
+AGGREGATED_JOY_TOPIC = "/portable_joy_command"
+#: Published by footpedal_node.
+FOOTPEDAL_JOY_TOPIC = "/footpedal_states"
+AGGREGATOR_KEY = "portable_joy_command_node"
+
+
+def resolve_task_input_topic(
+    yaml_paths: Iterable[Path | str], override: str = ""
+) -> str:
+    """Return the topic to remap onto ``/joy`` for task_command_dispatch_node.
+
+    Which input accepts/rejects an episode is a property of a *box*, not of the
+    fleet, so it is resolved from the same common/<variant>/local layering as
+    everything else rather than from a launch argument baked into
+    docker-compose.yml.
+
+    Precedence, highest first:
+
+    1. ``override`` — an explicit ``joy_remap_topic:=…`` launch argument, for
+       one-off debugging.
+    2. ``task_command_dispatch_node.ros__parameters.joy_source_topic`` in the
+       merged YAML; later layers win, so ``config/local/`` beats the variant.
+       It is a scalar on purpose: the merge rule for lists is *replace*, which
+       has bitten this config repeatedly, and a scalar has no such trap.
+    3. Presence of ``portable_joy_command_node``. A box that spawns the
+       aggregator wants to consume it — nothing else publishes that topic, and
+       consuming a topic nobody publishes is never the intent.
+    4. ``/footpedal_states``.
+
+    Rule 3 is what keeps a *stationary* box that opted into the glove (yubi1
+    declares the aggregator in ``config/local/``) on the glove even if the
+    explicit pin in rule 2 is ever lost.
+    """
+    if override:
+        return override
+
+    explicit: str | None = None
+    keys: set[str] = set()
+    for path in yaml_paths:
+        p = Path(path)
+        if not p.exists():
+            continue
+        with p.open("r") as f:
+            data = yaml.safe_load(f) or {}
+        if not isinstance(data, dict):
+            continue
+        keys.update(data.keys())
+        section = data.get(TASK_DISPATCH_KEY)
+        if isinstance(section, dict):
+            params = section.get("ros__parameters")
+            if isinstance(params, dict) and params.get(TASK_INPUT_PARAM):
+                explicit = str(params[TASK_INPUT_PARAM])
+
+    if explicit:
+        return explicit
+    if AGGREGATOR_KEY in keys:
+        return AGGREGATED_JOY_TOPIC
+    return FOOTPEDAL_JOY_TOPIC
+
+
 def collect_yaml_keys(yaml_paths: Iterable[Path | str]) -> set[str]:
     """Return the union of top-level keys from given YAML files. Missing files are skipped."""
     keys: set[str] = set()

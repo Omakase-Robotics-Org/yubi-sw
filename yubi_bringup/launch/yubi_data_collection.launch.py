@@ -12,7 +12,9 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
+    LogInfo,
     OpaqueFunction,
+    SetLaunchConfiguration,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
@@ -26,6 +28,7 @@ from pathlib import Path
 from yubi_bringup.launch_registry import (
     DATA_COLLECTION_NODE_REGISTRY,
     collect_yaml_keys,
+    resolve_task_input_topic,
     select_nodes,
 )
 
@@ -41,7 +44,21 @@ def _spawn_data_collection_nodes(context, *_args, **_kwargs):
     ]
     keys = collect_yaml_keys(paths)
     params = [str(p) for p in paths if p.exists()]
-    return select_nodes(DATA_COLLECTION_NODE_REGISTRY, keys, params)
+
+    # The task input is a per-box setting resolved from the same
+    # common/<variant>/local layering as everything else. An explicit
+    # joy_remap_topic:= argument still wins, for one-off debugging.
+    override = context.perform_substitution(LaunchConfiguration("joy_remap_topic"))
+    topic = resolve_task_input_topic(paths, override=override)
+
+    # task_command_dispatch_node's remap reads LaunchConfiguration at execution
+    # time, so setting it here — before the nodes in the returned list run —
+    # is what makes the resolved value take effect.
+    return [
+        LogInfo(msg=f"[yubi] task input -> {topic} (variant={variant})"),
+        SetLaunchConfiguration("joy_remap_topic", topic),
+        *select_nodes(DATA_COLLECTION_NODE_REGISTRY, keys, params),
+    ]
 
 
 def generate_launch_description():
@@ -77,13 +94,14 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "joy_remap_topic",
-                default_value="/footpedal_states",
+                default_value="",
                 description=(
-                    "Topic remapped to /joy for task_command_dispatch_node. "
-                    "Default (both variants): /footpedal_states (footpedal_node) — "
-                    "operator's hands stay on the grippers. Portable can instead pass "
-                    "joy_remap_topic:=/portable_joy_command to use gripper double-click "
-                    "+ Quest controller buttons (aggregated by portable_joy_command_node)."
+                    "Override the topic remapped to /joy for "
+                    "task_command_dispatch_node. Leave empty (the default) to "
+                    "resolve it from config/{common,<variant>,local}/"
+                    "yubi_devices.yaml — see resolve_task_input_topic(). Set it "
+                    "only for one-off debugging; a box's normal input belongs in "
+                    "its config layer, not on the command line."
                 ),
             ),
             bringup_include,

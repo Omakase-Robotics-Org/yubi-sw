@@ -11,6 +11,12 @@ task_command_dispatch_node:
     # left/right position — verify per-unit with
     # `ros2 run yubi_bringup identify_footpedal` (see config/portable/yubi_devices.yaml
     # for the yubi1 footswitch's confirmed right/center/left mapping).
+    # joy_source_topic is intentionally NOT set here: unset means the
+    # footpedal (/footpedal_states), which is what a yagura stationary box
+    # uses. A stationary box that drives the task state machine from the
+    # gripper double-click instead sets it in config/local/ -- see
+    # deploy/yubi1/config-local/yubi_devices.yaml. Declaring
+    # portable_joy_command_node also flips it, so the two cannot disagree.
     joy_accept_button: 2
     joy_reject_button: 1
     joy_cancel_episode_button: 0
