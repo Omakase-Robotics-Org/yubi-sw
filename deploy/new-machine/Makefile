@@ -145,9 +145,14 @@ s3-creds: ## Wire the S3 IoT uploader + */5 cron (needs cert pre-placed in ~/iot
 	@if [ "$(IOT_THING)" = "yubi1" ]; then \
 		echo -e "$(RED)Refusing IOT_THING=yubi1 on a new machine. Pass a unique name:$(NC)"; \
 		echo "    make s3-creds IOT_THING=yubi2"; exit 1; fi
-	@# Install the uploader scripts next to $HOME (matches yubi1 layout). These
-	@# come from this deploy/ dir — see yubi_s3_direct.{py,sh} alongside this Makefile.
-	@install -m 0755 "$(dir $(realpath $(lastword $(MAKEFILE_LIST))))/yubi_s3_direct.py" "$(HOME)/yubi_s3_direct.py"
+	@# Install the uploader next to $HOME (matches yubi1 layout). It comes from
+	@# the CANONICAL deploy/yubi_s3_direct.py — one directory UP from this
+	@# Makefile. It used to be taken from this Makefile's own directory, where a
+	@# pre-task-partition copy sat: every machine provisioned that way uploaded
+	@# task-less keys and had all its episodes pooled under the fallback task,
+	@# silently. The copies are gone, and
+	@# yubi_bringup/test/test_deploy_uploader_is_single_source.py keeps them gone.
+	@install -m 0755 "$(dir $(realpath $(lastword $(MAKEFILE_LIST))))/../yubi_s3_direct.py" "$(HOME)/yubi_s3_direct.py"
 	@# Generate the wrapper with this machine's IOT_THING (no secrets in it).
 	@printf '#!/usr/bin/env bash\nexec 9>/tmp/yubi_s3_direct.lock; flock -n 9 || exit 0\nexport IOT_CERT=$$HOME/iot/device.cert.pem\nexport IOT_KEY=$$HOME/iot/device.private.key\nexport IOT_ROOT_CA=$$HOME/iot/AmazonRootCA1.pem\nexport IOT_ENDPOINT=%s\nexport IOT_ROLE_ALIAS=%s\nexport IOT_THING=%s\nexport S3_BUCKET=%s\npython3 $$HOME/yubi_s3_direct.py "$$@"\n' \
 		"$(IOT_ENDPOINT)" "$(IOT_ROLE_ALIAS)" "$(IOT_THING)" "$(S3_BUCKET)" > "$(HOME)/yubi_s3_direct.sh"
