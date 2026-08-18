@@ -33,3 +33,29 @@ groups:
         rate_escalation: 2
         debounce_sec: 0.5
         reason: "Head camera frame rate below 5 Hz ({detail})"
+
+  # ---------------------------------------------------------------------------
+  # Footpedal — the episode start/accept input on the stationary rig
+  # ---------------------------------------------------------------------------
+  # footpedal_node publishes /footpedal_states at 10 Hz while the pedal is
+  # connected and goes SILENT when the device is missing or lost. Without this
+  # group the gate could show every badge open while recording still could not
+  # be started, because on stationary the pedal IS the start button. Portable
+  # deliberately has no such group (the pedal is optional there), so the badge
+  # never appears on portable boxes.
+  footpedal:
+    recovery_sec: 0.5
+    default_type: topic_condition
+    conditions:
+
+      footpedal_timeout_warn:
+        topic: /footpedal_states
+        timeout_sec: 1.0
+        escalation: 1
+        reason: "Footpedal not publishing (> 1s) — check the USB cable"
+
+      footpedal_timeout_stop:
+        topic: /footpedal_states
+        timeout_sec: 3.0
+        escalation: 2
+        reason: "Footpedal disconnected (> 3s) — replug it (reconnects automatically)"

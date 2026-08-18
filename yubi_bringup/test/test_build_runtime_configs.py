@@ -271,6 +271,43 @@ class TestNoOpRefactor:
 # ---------------------------------------------------------------------------
 # TestPortableInvariants — portable structure assertions
 # ---------------------------------------------------------------------------
+class TestFootpedalGate:
+    """The footpedal health group is stationary-only (added 2026-08-18).
+
+    On stationary the pedal IS the episode start/accept button, so a dead or
+    unplugged pedal must show up as a red gate badge instead of "all open but
+    recording won't start". On portable the pedal is optional, so the badge
+    must never exist there at all.
+    """
+
+    def _gate_groups(self, variant: str) -> dict:
+        merger.build(config_root=CONFIG_ROOT, variant=variant, with_local=False)
+        path = CONFIG_ROOT / "_runtime" / variant / "recording_gate.yaml"
+        with path.open() as f:
+            return yaml.safe_load(f)["groups"]
+
+    def test_stationary_has_footpedal_group(self):
+        groups = self._gate_groups("stationary")
+        assert "footpedal" in groups, (
+            "stationary lost its footpedal gate group — a dead pedal would "
+            "again hide behind an all-open gate"
+        )
+        conds = groups["footpedal"]["conditions"]
+        topics = {c["topic"] for c in conds.values()}
+        assert topics == {"/footpedal_states"}
+        escalations = sorted(c["escalation"] for c in conds.values())
+        assert escalations == [1, 2], (
+            "footpedal group must carry both a warn (1) and a stop (2) condition"
+        )
+
+    def test_portable_has_no_footpedal_group(self):
+        groups = self._gate_groups("portable")
+        assert "footpedal" not in groups, (
+            "portable must not show a footpedal badge — the pedal is optional "
+            "there and an absent pedal would permanently block recording"
+        )
+
+
 class TestPortableInvariants:
     @pytest.fixture(scope="class")
     def portable_runtime(self):
