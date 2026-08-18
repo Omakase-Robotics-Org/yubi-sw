@@ -263,3 +263,22 @@ groups:
         condition: "msg.data < 120.0"
         escalation: 2
         timeout_sec: -1.0
+
+  # Footpedal health (stationary only) — added 2026-08-18; this fixture pins
+  # the EXPECTED merged output, so it grows together with the overlays.
+  footpedal:
+    recovery_sec: 0.5
+    default_type: topic_condition
+    conditions:
+
+      footpedal_timeout_warn:
+        topic: /footpedal_states
+        timeout_sec: 1.0
+        escalation: 1
+        reason: "Footpedal not publishing (> 1s) — check the USB cable"
+
+      footpedal_timeout_stop:
+        topic: /footpedal_states
+        timeout_sec: 3.0
+        escalation: 2
+        reason: "Footpedal disconnected (> 3s) — replug it (reconnects automatically)"
