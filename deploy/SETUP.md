@@ -63,7 +63,9 @@ and pins Start-YUBI to the dock. Existing copies are backed up as
   `~/projects/yubi-sw/yubi-sw` and flat `~/projects/yubi-sw` both work).
 - What double-clicking Start-YUBI does: (0) take a `flock` single-instance lock
   and exit if a start is already in progress → (1) startup menu: normal start /
-  change the Quest IP / recalibrate — auto-continues with a normal start after
+  change the Quest IP + variant (stationary/portable; backs up `.env`, rewrites
+  `ROBOT_VARIANT`, and a change flows into recalibration) / recalibrate —
+  auto-continues with a normal start after
   15 s → (2) open the calibration GUI when the saved udev rules / encoder
   origins are missing, were written for a different `ROBOT_VARIANT`, or the
   `/dev/yubi_*` devices are gone (USB re-plug) → (3) prompt Quest IP if

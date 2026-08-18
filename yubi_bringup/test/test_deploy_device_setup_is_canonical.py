@@ -59,3 +59,25 @@ def test_installer_installs_the_wrapper():
         "deploy/install-launcher.sh no longer installs the device-setup "
         "launcher — boxes would drift back to hand-made Desktop copies"
     )
+
+
+def test_variant_switch_backs_up_env_before_writing():
+    """The startup menu's variant switch must never edit .env without a backup.
+
+    ROBOT_VARIANT in .env is the single source of truth for the whole stack
+    (compose overlays, calibration GUI, launchers); a botched in-place edit
+    with no backup would take the box down with nothing to roll back to.
+    """
+    src = (REPO / "deploy" / "start-yubi.sh").read_text()
+    assert "構成タイプ" in src, (
+        "start-yubi lost the variant-switch menu the operator manual promises"
+    )
+    fn = src.split("choose_variant()", 1)
+    assert len(fn) == 2, "choose_variant() is gone from start-yubi.sh"
+    body = fn[1]
+    backup_pos = body.find('.env.bak-')
+    write_pos = body.find("sed -i")
+    assert 0 <= backup_pos < write_pos, (
+        "choose_variant must cp .env to a .env.bak-<timestamp> BEFORE the "
+        "sed that rewrites ROBOT_VARIANT"
+    )
