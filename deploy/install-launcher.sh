@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# install-launcher.sh — install the canonical YUBI launcher on this box.
+# install-launcher.sh — install the canonical YUBI launchers on this box.
 #
-# The launcher used to live only on each box's Desktop, which meant it died with
-# a reimage and drifted between boxes (as of 2026-07-29 yubi1/yubi2/yubi3 each
-# ran a different version). The repo copy is now the single source of truth;
-# this script pushes it onto the Desktop, into the application menu, and onto
-# the GNOME dock.
+# The launchers used to live only on each box's Desktop, which meant they died
+# with a reimage and drifted between boxes (as of 2026-07-29 yubi1/yubi2/yubi3
+# each ran a different start launcher, and yubi2's hand-made device-setup copy
+# kept a stale hardcoded variant that failed every calibration after the
+# 2026-07-29 profile switch). The repo copies are the single source of truth;
+# this script pushes Start-YUBI and YUBI-Device-Setup onto the Desktop, into
+# the application menu, and pins Start-YUBI to the GNOME dock.
 #
 # Usage:  ./deploy/install-launcher.sh
 # Idempotent. Existing Desktop copies are backed up, never deleted.
@@ -14,8 +16,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$HERE/start-yubi.sh"
 DESK_SRC="$HERE/Start-YUBI.desktop"
+DS_SRC="$HERE/yubi-device-setup.sh"
+DS_DESK_SRC="$HERE/YUBI-Device-Setup.desktop"
 [ -f "$SRC" ] || { echo "!! $SRC not found"; exit 1; }
 [ -f "$DESK_SRC" ] || { echo "!! $DESK_SRC not found"; exit 1; }
+[ -f "$DS_SRC" ] || { echo "!! $DS_SRC not found"; exit 1; }
+[ -f "$DS_DESK_SRC" ] || { echo "!! $DS_DESK_SRC not found"; exit 1; }
 
 REAL_HOME="$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)"
 [ -n "$REAL_HOME" ] || REAL_HOME="$HOME"
@@ -48,11 +54,22 @@ for target in "$DESKTOP_DIR/Start-YUBI.desktop" "$APPS_DIR/start-yubi.desktop"; 
   echo "    installed: $target"
 done
 
-# Mark the Desktop launcher trusted so GNOME does not show "Untrusted application
-# launcher" and refuse to run it on double-click.
+backup "$DESKTOP_DIR/yubi-device-setup.sh" "$DS_SRC"
+install -m 0755 "$DS_SRC" "$DESKTOP_DIR/yubi-device-setup.sh"
+echo "    installed: $DESKTOP_DIR/yubi-device-setup.sh"
+for target in "$DESKTOP_DIR/YUBI-Device-Setup.desktop" "$APPS_DIR/yubi-device-setup.desktop"; do
+  backup "$target" "$DS_DESK_SRC"
+  install -m 0755 "$DS_DESK_SRC" "$target"
+  echo "    installed: $target"
+done
+
+# Mark the Desktop launchers trusted so GNOME does not show "Untrusted
+# application launcher" and refuse to run them on double-click.
 if command -v gio >/dev/null 2>&1; then
-  gio set "$DESKTOP_DIR/Start-YUBI.desktop" metadata::trusted true 2>/dev/null \
-    && echo "    marked trusted (gio)" || true
+  for target in "$DESKTOP_DIR/Start-YUBI.desktop" "$DESKTOP_DIR/YUBI-Device-Setup.desktop"; do
+    gio set "$target" metadata::trusted true 2>/dev/null \
+      && echo "    marked trusted (gio): $target" || true
+  done
 fi
 update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
 

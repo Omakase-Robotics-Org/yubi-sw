@@ -3,11 +3,18 @@
 # yubi-sw / yubi-app stack dirs so nested (~/projects/yubi-sw/yubi-sw) and flat
 # (~/projects/yubi-sw) layouts both work).
 #   1. refuses to run twice at once (single-instance flock guard)
-#   2. asks the Quest IP if the headset isn't reachable
-#   3. (re)starts yubi-sw + yubi-app docker stacks
-#   4. checks the 6000pro LAN sync link
-#   5. waits until the web app answers on :3000
-#   6. opens the recording UI + the dashboard (2 browser windows)
+#   2. startup menu: normal start / change the Quest IP / recalibrate devices
+#      (auto-continues with a normal start after 15s, so an unattended
+#      double-click still boots)
+#   3. opens the calibration GUI (deploy/yubi-device-setup.sh) when the saved
+#      udev rules / encoder origins are missing, were written for a different
+#      variant, or the /dev/yubi_* devices are gone (re-plugged USB)
+#   4. asks the Quest IP if the headset isn't reachable
+#   5. asks before restarting if an episode is being recorded right now
+#   6. (re)starts yubi-sw + yubi-app docker stacks
+#   7. checks the 6000pro LAN sync link
+#   8. waits until the web app answers on :3000
+#   9. opens the recording UI + the dashboard (2 browser windows)
 #
 # CANONICAL COPY: deploy/start-yubi.sh in Omakase-Robotics-Org/yubi-sw.
 # Install with deploy/install-launcher.sh — do not hand-edit the Desktop copy.
@@ -105,27 +112,127 @@ QUEST_CFG=""
 [ -n "$SW" ] && QUEST_CFG=$(find "$SW" -path "*config/local/yubi_devices.yaml" 2>/dev/null | head -1)
 echo "detected: yubi-sw=$SW  yubi-app=$APP  quest_cfg=$QUEST_CFG"
 
+# --- device calibration state ------------------------------------------------
+# tools/yubi_udev_setup.sh (run via deploy/yubi-device-setup.sh) writes the udev
+# rules and the encoder origins. After a re-image, a variant switch, or a USB
+# re-plug into different ports, the saved state no longer matches and the stack
+# would come up without its /dev/yubi_* devices — check BEFORE starting and
+# offer the GUI here, instead of letting the recording gate fail later.
+RULES_FILE=/etc/udev/rules.d/99-yubi-devices.rules
+CALIB_FILE=/etc/yubi/encoder_limits.yaml
+VARIANT="stationary"
+if [ -n "$SW" ] && [ -f "$SW/.env" ]; then
+  _v=$(grep -E '^ROBOT_VARIANT=' "$SW/.env" | tail -1 | cut -d= -f2- | cut -d'#' -f1 | tr -d ' "')
+  [ -n "$_v" ] && VARIANT="$_v"
+fi
+
+calibration_state() {  # prints what's missing; exit 0 = everything in place
+  local bad=0 l
+  local links="/dev/yubi_left_camera /dev/yubi_right_camera /dev/yubi_left_esp32c6 /dev/yubi_right_esp32c6"
+  [ "$VARIANT" = portable ] && links="$links /dev/yubi_center_camera"
+  [ -f "$RULES_FILE" ] || { echo "udevルール未保存 ($RULES_FILE)"; bad=1; }
+  if [ -f "$RULES_FILE" ] && ! head -1 "$RULES_FILE" | grep -q "variant=$VARIANT"; then
+    echo "udevルールが別バリアントで保存されています（現在の設定: $VARIANT）"; bad=1
+  fi
+  [ -f "$CALIB_FILE" ] || { echo "エンコーダ原点未保存 ($CALIB_FILE)"; bad=1; }
+  for l in $links; do [ -e "$l" ] || { echo "$l がありません（未接続 or USBポート変更）"; bad=1; }; done
+  return $bad
+}
+
+run_device_setup() {
+  local ds="" c
+  for c in "$SW/deploy/yubi-device-setup.sh" "$REAL_HOME/Desktop/yubi-device-setup.sh"; do
+    [ -f "$c" ] && { ds="$c"; break; }
+  done
+  [ -n "$ds" ] || { echo "!! yubi-device-setup.sh not found"; return 1; }
+  echo "--- launching device setup: $ds (variant=$VARIANT)"
+  # The GUI runs under sudo, so it needs a terminal for the password prompt.
+  # --wait blocks until the operator closes the calibration terminal.
+  if command -v gnome-terminal >/dev/null 2>&1 && [ -n "${DISPLAY:-}" ]; then
+    gnome-terminal --wait -- bash -c "bash '$ds' --no-up" 2>/dev/null
+  elif [ -t 0 ]; then
+    bash "$ds" --no-up
+  else
+    notify-send -u critical "YUBI" "ターミナルを開けずセットアップGUIを起動できません" 2>/dev/null || true
+    return 1
+  fi
+}
+
 if [ "$DRYRUN" = 1 ]; then
   rc=0
   [ -n "$SW" ]        || { echo "!! FAIL: yubi-sw stack dir not found"; rc=1; }
   [ -n "$APP" ]       || { echo "!! WARN: yubi-app stack dir not found"; }
   [ -f "$QUEST_CFG" ] || { echo "!! WARN: quest config not found"; }
+  if _missing=$(calibration_state); then
+    echo "--- calibration: OK (variant=$VARIANT)"
+  else
+    echo "--- calibration: INCOMPLETE (variant=$VARIANT) - a real run would open the setup GUI"
+    echo "$_missing" | sed 's/^/      /'
+  fi
   echo "--- dry run: not touching docker / quest config / browser"
   [ "$rc" = 0 ] && echo "======== dry run OK ========" || echo "======== dry run FAILED ========"
   exit "$rc"
+fi
+
+# --- startup menu: normal start / change Quest IP / recalibrate ---------------
+# zenity exits 1 on Cancel and 5 on --timeout; both fall through to a normal
+# start, so a double-click with nobody at the keyboard still boots the stack.
+CHOICE="start"
+if command -v zenity >/dev/null 2>&1; then
+  _sel=$(zenity --list --radiolist --title="YUBI 起動" \
+        --text="どうしますか？（15秒後に自動でそのまま起動します）" \
+        --hide-header --timeout=15 --height=240 --width=460 \
+        --column="" --column="操作" \
+        TRUE "そのまま起動" \
+        FALSE "Quest IPを変更して起動" \
+        FALSE "デバイス再キャリブレーション（カメラ/エンコーダ）してから起動" \
+        2>/dev/null) || true
+  case "${_sel:-}" in
+    *"Quest IP"*)   CHOICE="quest_ip" ;;
+    *キャリブ*)      CHOICE="recalib" ;;
+  esac
+fi
+echo "--- startup choice: $CHOICE"
+
+NEED_SETUP=0
+if [ "$CHOICE" = "recalib" ]; then
+  NEED_SETUP=1
+elif ! _missing=$(calibration_state); then
+  echo "--- calibration incomplete:"
+  echo "$_missing" | sed 's/^/      /'
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --question --title="YUBI" --ok-label="セットアップを開く" --cancel-label="このまま起動" \
+      --text="キャリブレーションが未保存か、デバイス構成が変わっています:\n\n$_missing\n\nセットアップGUIを開きますか？" \
+      2>/dev/null && NEED_SETUP=1
+  else
+    NEED_SETUP=1
+  fi
+fi
+if [ "$NEED_SETUP" = 1 ]; then
+  run_device_setup
+  if _missing=$(calibration_state); then
+    echo "--- calibration now OK"
+  else
+    echo "!! calibration still incomplete - starting anyway:"
+    echo "$_missing" | sed 's/^/      /'
+    notify-send -u critical -i dialog-warning "YUBI" "キャリブレーション未完了のまま起動します" 2>/dev/null || true
+  fi
 fi
 
 # --- Quest headset IP: the airoa_quest bridge connects to the Quest at the IP in
 #     yubi_bringup/config/local/yubi_devices.yaml. It only changes when the wifi
 #     changes. Verify it pings; if not, ask the operator for the IP shown on the
 #     Quest's YUBI-app screen and update the config BEFORE the stack starts.
-ensure_quest_ip() {
+ensure_quest_ip() {  # ensure_quest_ip [force] - "force" opens the dialog even when reachable
+  local force="${1:-}"
   [ -f "$QUEST_CFG" ] || { echo "!! quest config not found"; return 0; }
   local cur; cur=$(grep -oE 'quest_ip:[[:space:]]*"?([0-9]{1,3}\.){3}[0-9]{1,3}' "$QUEST_CFG" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
   echo "--- Quest IP: ${cur:-<unset>} ; pinging..."
-  if [ -n "$cur" ] && [ "$cur" != "0.0.0.0" ] && ping -c1 -W2 "$cur" >/dev/null 2>&1; then echo "    OK reachable"; return 0; fi
-  echo "    Quest NOT reachable at ${cur:-<unset>} -- asking operator via dialog"
-  notify-send -u critical -i dialog-warning "YUBI" "Questに接続できません。IPを入力してください" 2>/dev/null || true
+  if [ -z "$force" ] && [ -n "$cur" ] && [ "$cur" != "0.0.0.0" ] && ping -c1 -W2 "$cur" >/dev/null 2>&1; then echo "    OK reachable"; return 0; fi
+  if [ -z "$force" ]; then
+    echo "    Quest NOT reachable at ${cur:-<unset>} -- asking operator via dialog"
+    notify-send -u critical -i dialog-warning "YUBI" "Questに接続できません。IPを入力してください" 2>/dev/null || true
+  fi
   local new=""
   while true; do
     new=$(zenity --entry --title="Quest IP" --text="QuestのYUBIアプリ画面のIPを入力（例: 192.168.11.5）" --entry-text="${cur}" 2>/dev/null) || { echo "    cancelled - keeping ${cur:-<unset>}"; return 0; }
@@ -139,7 +246,26 @@ ensure_quest_ip() {
     notify-send -u critical -i dialog-warning "YUBI" "Quest IPを $new に更新（まだ到達せず。Quest/Wi-Fiを確認）" 2>/dev/null || true
   fi
 }
-ensure_quest_ip
+if [ "$CHOICE" = "quest_ip" ]; then ensure_quest_ip force; else ensure_quest_ip; fi
+
+# --- don't yank a recording out from under the operator ------------------------
+# Starting while the stack is already up is a forced down+up (that IS the
+# intended repair action for a wedged stack) — but if an episode is being
+# recorded right now, the restart would kill it, so ask first.
+if docker top yubi_core 2>/dev/null | grep -q rosbag2 || docker top yubi 2>/dev/null | grep -q rosbag2; then
+  echo "--- a recording appears to be in progress"
+  if command -v zenity >/dev/null 2>&1; then
+    if ! zenity --question --default-cancel --title="YUBI" \
+         --ok-label="強制再起動する" --cancel-label="中止（録画を続ける）" \
+         --text="録画が進行中のようです。\n再起動すると進行中のエピソードは失われます。\n\n強制再起動しますか？" 2>/dev/null; then
+      echo "    operator cancelled - leaving the running stack untouched"
+      notify-send -i video-display "YUBI" "起動を中止しました（録画継続中）" 2>/dev/null || true
+      exit 0
+    fi
+  fi
+  echo "    operator confirmed the forced restart"
+fi
+
 restart_stack "$SW"
 restart_stack "$APP"
 

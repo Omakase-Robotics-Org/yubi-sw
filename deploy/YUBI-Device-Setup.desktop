@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=YUBI Device Setup
+Comment=カメラ/エンコーダのキャリブレーションGUI（バリアントは .env から自動判定）
+Exec=gnome-terminal -- /bin/bash -lc "exec ~/Desktop/yubi-device-setup.sh"
+Icon=preferences-desktop-peripherals
+Terminal=false
+Categories=Utility;

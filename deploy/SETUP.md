@@ -50,20 +50,36 @@ different launchers by 2026-07-29):
 ./deploy/install-launcher.sh
 ```
 
-It installs `deploy/start-yubi.sh` → `~/Desktop/start-yubi.sh`, the `.desktop`
-entry to both `~/Desktop/` and `~/.local/share/applications/`, marks it trusted
-for GNOME, and pins it to the dock. Existing copies are backed up as
+It installs `deploy/start-yubi.sh` → `~/Desktop/start-yubi.sh` **and**
+`deploy/yubi-device-setup.sh` → `~/Desktop/yubi-device-setup.sh` (the
+camera/encoder calibration wrapper), their `.desktop` entries to both
+`~/Desktop/` and `~/.local/share/applications/`, marks them trusted for GNOME,
+and pins Start-YUBI to the dock. Existing copies are backed up as
 `*.bak-<timestamp>`, never deleted. It is idempotent — re-run it after every
-`git pull` that touches the launcher.
+`git pull` that touches the launchers.
 
 - `Exec=` needs no per-box editing: it is `/bin/bash -lc "exec ~/Desktop/start-yubi.sh"`,
   and the script auto-detects the yubi-sw/yubi-app stack dirs (nested
   `~/projects/yubi-sw/yubi-sw` and flat `~/projects/yubi-sw` both work).
-- What double-clicking it does: (0) take a `flock` single-instance lock and exit
-  if a start is already in progress → (1) prompt Quest IP if unreachable →
-  (2) restart yubi-sw + yubi-app docker stacks → (3) warn if the 6000pro LAN
-  sync link is down → (4) wait for :3000 → (5) open **2 browser windows**:
-  recording UI `localhost:3000/web` + dashboard `localhost:3000/web/dashboard`.
+- What double-clicking Start-YUBI does: (0) take a `flock` single-instance lock
+  and exit if a start is already in progress → (1) startup menu: normal start /
+  change the Quest IP / recalibrate — auto-continues with a normal start after
+  15 s → (2) open the calibration GUI when the saved udev rules / encoder
+  origins are missing, were written for a different `ROBOT_VARIANT`, or the
+  `/dev/yubi_*` devices are gone (USB re-plug) → (3) prompt Quest IP if
+  unreachable → (4) if an episode is recording right now, ask before the forced
+  restart → (5) restart yubi-sw + yubi-app docker stacks → (6) warn if the
+  6000pro LAN sync link is down → (7) wait for :3000 → (8) open **2 browser
+  windows**: recording UI `localhost:3000/web` + dashboard
+  `localhost:3000/web/dashboard`. Calibration is therefore part of Start-YUBI —
+  a re-imaged or re-plugged box heals on the next double-click; the separate
+  YUBI-Device-Setup icon is just a direct entrance to the same wrapper.
+- The calibration wrapper (`deploy/yubi-device-setup.sh`) resolves the variant
+  from the stack's `.env` (`ROBOT_VARIANT`) — never hardcode a variant in a
+  launcher (yubi2's hand-made Desktop copy did, and every calibration failed
+  with exit=3 after the box switched profiles on 2026-07-29). It also
+  hard-resets the gripper ESP32C6 boards first (USB-CDC wedge) and always
+  brings the docker stack back up, even when the GUI fails.
 - The `flock` guard is load-bearing: the dock entry never matches a window, so
   GNOME launches a fresh copy on every click. On 2026-07-29 four copies started
   within two seconds on yubi1 and their racing `docker compose down` / `up -d`
