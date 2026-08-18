@@ -246,6 +246,19 @@ ensure_quest_ip() {  # ensure_quest_ip [force] - "force" opens the dialog even w
     notify-send -u critical -i dialog-warning "YUBI" "Quest IPを $new に更新（まだ到達せず。Quest/Wi-Fiを確認）" 2>/dev/null || true
   fi
 }
+# --- disk space: last line of defense (yubi-disk-guard.sh cleans from cron) ---
+FREE_GB=$(df -BG --output=avail "$REAL_HOME" 2>/dev/null | tail -1 | tr -dc 0-9)
+echo "--- free disk: ${FREE_GB:-?}GB"
+if [ -n "$FREE_GB" ] && [ "$FREE_GB" -lt 30 ]; then
+  echo "!! low disk (${FREE_GB}GB free)"
+  if command -v zenity >/dev/null 2>&1; then
+    zenity --question --default-cancel --title="YUBI" \
+      --ok-label="それでも起動" --cancel-label="中止" \
+      --text="ディスク残量が${FREE_GB}GBしかありません。\nこのまま録画するとPCが停止する恐れがあります。\n（自動掃除が数分内に走ります — 少し待つか、管理者に連絡してください）\n\nそれでも起動しますか？" 2>/dev/null \
+      || { echo "    operator aborted (low disk)"; exit 0; }
+  fi
+fi
+
 if [ "$CHOICE" = "quest_ip" ]; then ensure_quest_ip force; else ensure_quest_ip; fi
 
 # --- don't yank a recording out from under the operator ------------------------

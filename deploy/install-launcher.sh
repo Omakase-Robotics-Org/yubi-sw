@@ -73,6 +73,25 @@ if command -v gio >/dev/null 2>&1; then
 fi
 update-desktop-database "$APPS_DIR" >/dev/null 2>&1 || true
 
+# Disk guard: ~/.local/bin + a cron entry (idempotent). This is what keeps a
+# runaway/abandoned recording or docker debris from filling the disk and
+# crashing the box — it must run without any operator involvement.
+DG_SRC="$HERE/yubi-disk-guard.sh"
+if [ -f "$DG_SRC" ]; then
+  BIN_DIR="$REAL_HOME/.local/bin"
+  mkdir -p "$BIN_DIR"
+  backup "$BIN_DIR/yubi-disk-guard.sh" "$DG_SRC"
+  install -m 0755 "$DG_SRC" "$BIN_DIR/yubi-disk-guard.sh"
+  echo "    installed: $BIN_DIR/yubi-disk-guard.sh"
+  CRON_LINE="*/10 * * * * $BIN_DIR/yubi-disk-guard.sh >/dev/null 2>&1"
+  if ! crontab -l 2>/dev/null | grep -Fq "yubi-disk-guard.sh"; then
+    ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab - \
+      && echo "    cron installed: $CRON_LINE" || echo "    !! could not install cron"
+  else
+    echo "    cron already present (yubi-disk-guard.sh)"
+  fi
+fi
+
 # Pin to the GNOME dock if it is not already there.
 if command -v gsettings >/dev/null 2>&1; then
   cur="$(gsettings get org.gnome.shell favorite-apps 2>/dev/null || echo '')"

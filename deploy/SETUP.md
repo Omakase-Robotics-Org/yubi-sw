@@ -85,7 +85,26 @@ and pins Start-YUBI to the dock. Existing copies are backed up as
   within two seconds on yubi1 and their racing `docker compose down` / `up -d`
   repeatedly destroyed `yubi_core`.
 
+## 5. Disk protection (automatic — installed by `install-launcher.sh`)
+A full disk crashes the box (2026-08-13: an unstopped recording grew a single
+253GB .mcap over four days on yubi1). Three defenses, none needing an operator:
+
+- **`~/.local/bin/yubi-disk-guard.sh`** (cron `*/10`, installed with the
+  launchers): deletes abandoned recordings under `~/yubi_data/rosbags` once
+  they have been idle >48h (recent ones stay as a recovery buffer), stops and
+  deletes a still-growing recording past 25GB (`docker restart yubi_core`),
+  and below 80GB free warns the desktop + reclaims docker debris (dangling
+  volumes / build cache). Thresholds via `YUBI_GUARD_*` env. Log:
+  `~/yubi-disk-guard.log`.
+- **Uploader GC**: with `YUBI_GC_DAYS=14` in `~/yubi_s3_direct.sh`, the
+  uploader deletes local MinIO objects 14 days after their upload — each
+  delete is gated on a fresh HEAD to AWS S3 (key+size match), never on the
+  state file alone. Unset/0 disables.
+- **start-yubi**: refuses to start below 30GB free (operator can override).
+
 ## Data path
 yubi<N> collect → local MinIO → `~/yubi_s3_direct.py` → S3 `omakase-robotics-data`
 (`task=` partitioned) → data-infra convert → HF. (No 6000pro LAN dependency for
-upload; each box uploads its own data directly with its IoT cert.)
+upload; each box uploads its own data directly with its IoT cert.) Local MinIO
+copies are GC'd 14 days after verified upload (§5); raw rosbag dirs are removed
+by the normal flow within minutes, and abandoned ones by the disk guard.

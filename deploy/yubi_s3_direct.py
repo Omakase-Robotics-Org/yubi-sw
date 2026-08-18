@@ -29,8 +29,16 @@ Env:
   MINIO_BUCKET     data
   YUBI_SW_DIR      ~/projects/yubi-sw/yubi-sw   (for MinIO cred discovery)
   STATE_FILE       ~/.yubi_s3_uploaded.json
+  YUBI_GC_DAYS     unset/0 = keep everything (default). N>0 = after the upload
+                   pass, delete local MinIO objects older than N days whose
+                   presence in AWS S3 is re-verified by a HEAD (key+size match)
+                   right before each delete — the dedupe state alone is never
+                   trusted for a deletion. Recent objects always survive as a
+                   local recovery buffer. (Added 2026-08-18: local MinIO grew
+                   unbounded — 70GB on yubi2 — and full disks crash the boxes.)
 Flags: --test (reachability), --dry-run (list would-upload + dest keys, NO write).
 """
+import datetime
 import os, sys, re, json, glob, time, ssl, urllib.request
 import boto3
 from botocore.config import Config
@@ -46,6 +54,7 @@ MINIO_EP     = os.environ.get("MINIO_ENDPOINT", "http://127.0.0.1:9000")
 MINIO_BUCKET = os.environ.get("MINIO_BUCKET", "data")
 SW_DIR = os.path.expanduser(os.environ.get("YUBI_SW_DIR", "~/projects/yubi-sw/yubi-sw"))
 STATE  = os.path.expanduser(os.environ.get("STATE_FILE", "~/.yubi_s3_uploaded.json"))
+GC_DAYS = int(os.environ.get("YUBI_GC_DAYS", "0") or 0)
 
 # boto3>=1.36 default CRC (aws-chunked) breaks streaming uploads here -> when_required
 _AWSCFG = Config(request_checksum_calculation="when_required",
@@ -127,6 +136,51 @@ def task_for(local, prefix, cache):
     return slug
 
 
+def gc_local(local, aws, aws_t, done, tcache, dry):
+    """Delete local MinIO objects that are verifiably in AWS S3 and old enough.
+
+    Two passes over one listing snapshot: candidates are collected (and their
+    task slugs resolved, while each recording's meta.json still exists) before
+    anything is deleted, and within a recording meta.json goes LAST — otherwise
+    a half-collected recording could no longer resolve its own dest key.
+    Every delete is gated on a fresh HEAD to AWS (task= key first, then the
+    legacy task-less key) with a size match; a miss means the object is kept.
+    """
+    cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=GC_DAYS)
+    cands, kept = [], 0
+    for page in local.get_paginator("list_objects_v2").paginate(Bucket=MINIO_BUCKET):
+        for o in page.get("Contents", []):
+            src, sz = o["Key"], o["Size"]
+            if o["LastModified"] > cutoff or done.get(src) != sz:
+                kept += 1; continue
+            prefix = recording_prefix(src)
+            slug = task_for(local, prefix, tcache) if prefix else "untagged"
+            cands.append((src, sz, slug))
+    cands.sort(key=lambda c: c[0].endswith("meta.json"))  # meta.json of each recording last
+    n_del, freed = 0, 0
+    for src, sz, slug in cands:
+        if time.time() - aws_t > 2400:
+            aws = aws_client(); aws_t = time.time(); print("[creds] refreshed", flush=True)
+        in_s3 = False
+        for key in (insert_task(src, slug), src):
+            try:
+                if aws.head_object(Bucket=AWS_BUCKET, Key=key)["ContentLength"] == sz:
+                    in_s3 = True; break
+            except Exception:
+                pass
+        if not in_s3:
+            kept += 1; continue
+        if dry:
+            n_del += 1; freed += sz; continue
+        try:
+            local.delete_object(Bucket=MINIO_BUCKET, Key=src)
+            n_del += 1; freed += sz
+        except Exception as e:
+            print(f"[gc-ERR] {src[:80]}: {str(e)[:120]}", flush=True)
+    verb = "would delete" if dry else "deleted"
+    print(f"[gc] {verb} {n_del} local objects ({freed/1e9:.2f}GB) uploaded >{GC_DAYS}d ago; kept {kept}", flush=True)
+
+
 def main():
     for f in (CERT, KEY, CA):
         if not os.path.exists(f): sys.exit(f"missing cert: {f}")
@@ -179,9 +233,11 @@ def main():
                 print(f"[ERR] {src[:80]}: {str(e)[:150]}", flush=True)
     if dry:
         print(f"[dry-run] would upload {n_up}, skip {n_skip} (already in S3); {len(done)} tracked")
-        return
-    json.dump({"done": done, "ts": int(time.time())}, open(STATE, "w"))
-    print(f"[done] uploaded {n_up}, skipped {n_skip}; {len(done)} tracked", flush=True)
+    else:
+        json.dump({"done": done, "ts": int(time.time())}, open(STATE, "w"))
+        print(f"[done] uploaded {n_up}, skipped {n_skip}; {len(done)} tracked", flush=True)
+    if GC_DAYS > 0:
+        gc_local(local, aws, aws_t, done, tcache, dry)
 
 
 if __name__ == "__main__":
