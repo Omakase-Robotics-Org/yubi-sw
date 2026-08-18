@@ -32,6 +32,8 @@ IOT_ROLE_ALIAS ?= yubi-uploader-alias
 # MUST be unique per device (override: make s3-creds IOT_THING=yubi2)
 IOT_THING      ?= $(strip $(shell hostname))
 S3_BUCKET      ?= omakase-robotics-data
+# Local GC: delete local MinIO copies this many days after HEAD-verified upload
+GC_DAYS        ?= 14
 
 GREEN := \033[32m
 RED   := \033[31m
@@ -154,8 +156,12 @@ s3-creds: ## Wire the S3 IoT uploader + */5 cron (needs cert pre-placed in ~/iot
 	@# yubi_bringup/test/test_deploy_uploader_is_single_source.py keeps them gone.
 	@install -m 0755 "$(dir $(realpath $(lastword $(MAKEFILE_LIST))))/../yubi_s3_direct.py" "$(HOME)/yubi_s3_direct.py"
 	@# Generate the wrapper with this machine's IOT_THING (no secrets in it).
-	@printf '#!/usr/bin/env bash\nexec 9>/tmp/yubi_s3_direct.lock; flock -n 9 || exit 0\nexport IOT_CERT=$$HOME/iot/device.cert.pem\nexport IOT_KEY=$$HOME/iot/device.private.key\nexport IOT_ROOT_CA=$$HOME/iot/AmazonRootCA1.pem\nexport IOT_ENDPOINT=%s\nexport IOT_ROLE_ALIAS=%s\nexport IOT_THING=%s\nexport S3_BUCKET=%s\npython3 $$HOME/yubi_s3_direct.py "$$@"\n' \
-		"$(IOT_ENDPOINT)" "$(IOT_ROLE_ALIAS)" "$(IOT_THING)" "$(S3_BUCKET)" > "$(HOME)/yubi_s3_direct.sh"
+	@# YUBI_GC_DAYS enables the uploader's local GC (delete local MinIO copies
+	@# N days after their upload is HEAD-verified in AWS S3) — without it the
+	@# local MinIO grows unbounded and eventually fills the disk (70GB on yubi2
+	@# by 2026-08-18).
+	@printf '#!/usr/bin/env bash\nexec 9>/tmp/yubi_s3_direct.lock; flock -n 9 || exit 0\nexport IOT_CERT=$$HOME/iot/device.cert.pem\nexport IOT_KEY=$$HOME/iot/device.private.key\nexport IOT_ROOT_CA=$$HOME/iot/AmazonRootCA1.pem\nexport IOT_ENDPOINT=%s\nexport IOT_ROLE_ALIAS=%s\nexport IOT_THING=%s\nexport S3_BUCKET=%s\nexport YUBI_GC_DAYS=$${YUBI_GC_DAYS:-%s}\npython3 $$HOME/yubi_s3_direct.py "$$@"\n' \
+		"$(IOT_ENDPOINT)" "$(IOT_ROLE_ALIAS)" "$(IOT_THING)" "$(S3_BUCKET)" "$(GC_DAYS)" > "$(HOME)/yubi_s3_direct.sh"
 	@chmod 0755 "$(HOME)/yubi_s3_direct.sh"
 	@# Install the */5 cron line if not already present.
 	@( crontab -l 2>/dev/null | grep -v 'yubi_s3_direct.sh'; \
