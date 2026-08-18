@@ -3,9 +3,10 @@
 # yubi-sw / yubi-app stack dirs so nested (~/projects/yubi-sw/yubi-sw) and flat
 # (~/projects/yubi-sw) layouts both work).
 #   1. refuses to run twice at once (single-instance flock guard)
-#   2. startup menu: normal start / change the Quest IP / recalibrate devices
+#   2. startup menu: normal start / change the Quest IP + variant / recalibrate
 #      (auto-continues with a normal start after 15s, so an unattended
-#      double-click still boots)
+#      double-click still boots; a variant change backs up .env, rewrites
+#      ROBOT_VARIANT, and flows into recalibration via the check below)
 #   3. opens the calibration GUI (deploy/yubi-device-setup.sh) when the saved
 #      udev rules / encoder origins are missing, were written for a different
 #      variant, or the /dev/yubi_* devices are gone (re-plugged USB)
@@ -174,17 +175,17 @@ if [ "$DRYRUN" = 1 ]; then
   exit "$rc"
 fi
 
-# --- startup menu: normal start / change Quest IP / recalibrate ---------------
+# --- startup menu: normal start / change Quest IP + variant / recalibrate -----
 # zenity exits 1 on Cancel and 5 on --timeout; both fall through to a normal
 # start, so a double-click with nobody at the keyboard still boots the stack.
 CHOICE="start"
 if command -v zenity >/dev/null 2>&1; then
   _sel=$(zenity --list --radiolist --title="YUBI 起動" \
         --text="どうしますか？（15秒後に自動でそのまま起動します）" \
-        --hide-header --timeout=15 --height=240 --width=460 \
+        --hide-header --timeout=15 --height=240 --width=520 \
         --column="" --column="操作" \
         TRUE "そのまま起動" \
-        FALSE "Quest IPを変更して起動" \
+        FALSE "Quest IP・構成タイプを変更して起動" \
         FALSE "デバイス再キャリブレーション（カメラ/エンコーダ）してから起動" \
         2>/dev/null) || true
   case "${_sel:-}" in
@@ -193,6 +194,49 @@ if command -v zenity >/dev/null 2>&1; then
   esac
 fi
 echo "--- startup choice: $CHOICE"
+
+# --- variant switch (stationary/portable), offered on the change-settings path.
+# Writes the single source of truth ($SW/.env ROBOT_VARIANT) after backing it
+# up. A change makes calibration_state below flag the variant-stamp mismatch,
+# which walks the operator straight into recalibration - no extra wiring.
+choose_variant() {
+  command -v zenity >/dev/null 2>&1 || return 0
+  if [ ! -f "$SW/.env" ]; then
+    zenity --error --text="設定ファイル（.env）がまだありません。先に make install を実行してください。" 2>/dev/null || true
+    return 0
+  fi
+  local st=FALSE po=FALSE sel new
+  if [ "$VARIANT" = "portable" ]; then po=TRUE; else st=TRUE; fi
+  sel=$(zenity --list --radiolist --title="構成タイプ" \
+        --text="この機体の構成タイプ（現在: $VARIANT）" \
+        --hide-header --height=200 --width=520 \
+        --column="" --column="type" \
+        "$st" "stationary（据え置き: やぐら＋RealSense頭＋フットペダル）" \
+        "$po" "portable（装着型: USBカメラ3台＋Quest操作）" \
+        2>/dev/null) || { echo "--- variant unchanged ($VARIANT)"; return 0; }
+  case "$sel" in
+    portable*)   new="portable" ;;
+    stationary*) new="stationary" ;;
+    *)           echo "--- variant unchanged ($VARIANT)"; return 0 ;;
+  esac
+  [ "$new" = "$VARIANT" ] && { echo "--- variant unchanged ($VARIANT)"; return 0; }
+  local bak="$SW/.env.bak-$(date +%Y%m%d-%H%M%S)"
+  cp -a "$SW/.env" "$bak" || { echo "!! could not back up .env - variant NOT changed"; return 0; }
+  if grep -qE '^ROBOT_VARIANT=' "$SW/.env"; then
+    sed -i -E "s/^ROBOT_VARIANT=.*/ROBOT_VARIANT=$new/" "$SW/.env"
+  else
+    echo "ROBOT_VARIANT=$new" >> "$SW/.env"
+  fi
+  if grep -qE "^ROBOT_VARIANT=$new$" "$SW/.env"; then
+    echo "--- variant: $VARIANT -> $new (backup: $bak)"
+    VARIANT="$new"
+    notify-send -i video-display "YUBI" "構成タイプを $new に変更（元の設定は $(basename "$bak")）" 2>/dev/null || true
+  else
+    echo "!! .env edit did not take - restoring backup"
+    cp -a "$bak" "$SW/.env"
+  fi
+}
+if [ "$CHOICE" = "quest_ip" ]; then choose_variant; fi
 
 NEED_SETUP=0
 if [ "$CHOICE" = "recalib" ]; then
