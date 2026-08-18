@@ -16,5 +16,8 @@ export IOT_ENDPOINT="${IOT_ENDPOINT:-c7365kceqmnid.credentials.iot.ap-northeast-
 export IOT_ROLE_ALIAS="${IOT_ROLE_ALIAS:-yubi-uploader-alias}"
 export IOT_THING="${IOT_THING:-$(hostname)}"   # MUST be unique per device
 export S3_BUCKET="${S3_BUCKET:-omakase-robotics-data}"
+# GC local MinIO copies N days after their upload is HEAD-verified in AWS S3
+# (recent days stay local as a recovery buffer; 0 disables).
+export YUBI_GC_DAYS="${YUBI_GC_DAYS:-14}"
 
 python3 "$HOME/yubi_s3_direct.py" "$@"
