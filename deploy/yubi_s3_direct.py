@@ -64,9 +64,18 @@ _MINIOCFG = Config(signature_version="s3v4", connect_timeout=5, read_timeout=60,
                    retries={"max_attempts": 2})
 
 # --- task-partition helpers -------------------------------------------------
-_TASK_RE   = re.compile(r"/task=[^/]+")
+# Two key generations coexist in the fleet (2026-08):
+#   legacy    org=…/date=…/robot_type=…/robot_id=…/ts=…       (no task in key)
+#   canonical org=…/date=…/task=<id>/robot_type=…/robot_id=…/ts=…
+# The canonical task= segment is written by yubi-core's data-backend
+# (canonical_path.py) and is what omakase-data-infra task_routing keys on.
+# This uploader only synthesizes a task segment for LEGACY sources (inserted
+# after robot_id=); a canonical source is uploaded VERBATIM — inserting again
+# produced double-task keys on 2026-08-19 (132 objects, repaired by hand).
 _PREFIX_RE = re.compile(r"(.*?/uuid=[^/]+/)")       # recording dir (holds meta.json)
 _AFTER_RID = re.compile(r"(.*?/robot_id=[^/]+/)(.*)")
+_CANON_TASK_RE  = re.compile(r"/task=[^/]+/robot_type=")   # canonical position
+_LEGACY_TASK_RE = re.compile(r"(/robot_id=[^/]+)/task=[^/]+")
 
 
 def slugify(s: str) -> str:
@@ -75,8 +84,18 @@ def slugify(s: str) -> str:
 
 
 def strip_task(key: str) -> str:
-    """Dest key (…/robot_id=X/task=slug/ts=…) -> source key (…/robot_id=X/ts=…)."""
-    return _TASK_RE.sub("", key, count=1)
+    """S3 key -> SOURCE key: drop only the legacy inserted segment.
+
+    Legacy dest  …/robot_id=X/task=slug/ts=…  -> …/robot_id=X/ts=…
+    Canonical    …/date=D/task=id/robot_type=…/ts=…  (kept verbatim: the
+    canonical task= after date= is part of the source key itself).
+    """
+    return _LEGACY_TASK_RE.sub(r"\1", key, count=1)
+
+
+def is_canonical(key: str) -> bool:
+    """True when the source key already carries the canonical task= segment."""
+    return bool(_CANON_TASK_RE.search(key))
 
 
 def recording_prefix(key: str):
@@ -153,8 +172,11 @@ def gc_local(local, aws, aws_t, done, tcache, dry):
             src, sz = o["Key"], o["Size"]
             if o["LastModified"] > cutoff or done.get(src) != sz:
                 kept += 1; continue
-            prefix = recording_prefix(src)
-            slug = task_for(local, prefix, tcache) if prefix else "untagged"
+            if is_canonical(src):
+                slug = None                          # HEAD the source key verbatim
+            else:
+                prefix = recording_prefix(src)
+                slug = task_for(local, prefix, tcache) if prefix else "untagged"
             cands.append((src, sz, slug))
     cands.sort(key=lambda c: c[0].endswith("meta.json"))  # meta.json of each recording last
     n_del, freed = 0, 0
@@ -162,7 +184,8 @@ def gc_local(local, aws, aws_t, done, tcache, dry):
         if time.time() - aws_t > 2400:
             aws = aws_client(); aws_t = time.time(); print("[creds] refreshed", flush=True)
         in_s3 = False
-        for key in (insert_task(src, slug), src):
+        keys = (src,) if slug is None else (insert_task(src, slug), src)
+        for key in keys:
             try:
                 if aws.head_object(Bucket=AWS_BUCKET, Key=key)["ContentLength"] == sz:
                     in_s3 = True; break
@@ -212,9 +235,12 @@ def main():
             src, sz = o["Key"], o["Size"]           # SOURCE (MinIO) key = dedupe key
             if sz == 0 or done.get(src) == sz:
                 n_skip += 1; continue
-            prefix = recording_prefix(src)
-            slug = task_for(local, prefix, tcache) if prefix else "untagged"
-            dst = insert_task(src, slug)            # DEST (AWS) key with task=
+            if is_canonical(src):
+                slug, dst = "(canonical)", src      # key already carries task= — upload verbatim
+            else:
+                prefix = recording_prefix(src)
+                slug = task_for(local, prefix, tcache) if prefix else "untagged"
+                dst = insert_task(src, slug)        # legacy source: DEST key gains task=<slug>
             if dry:
                 n_up += 1
                 if n_up <= 20:
